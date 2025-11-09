@@ -415,7 +415,7 @@ else:
         status_text = st.empty()
         results = []
 
-        for i, entry in enumerate(manual_entries):
+       for i, entry in enumerate(manual_entries):
     status_text.text(f"Analyzing {i+1}/{len(manual_entries)}: {entry['player']}...")
     progress_bar.progress((i + 1) / len(manual_entries))
     try:
@@ -445,60 +445,65 @@ else:
     except Exception as e:
         st.warning(f"⚠️ Skipped {entry['player']}: {str(e)}")
 
-        progress_bar.empty()
-        status_text.empty()
+# ------------------------------------------
+# AFTER loop completes, show results
+# ------------------------------------------
+progress_bar.empty()
+status_text.empty()
 
-        if results:
-            st.success(f"✅ Successfully analyzed {len(results)}/{len(manual_entries)} props!")
+if results:
+    st.success(f"✅ Successfully analyzed {len(results)}/{len(manual_entries)} props!")
 
-            results_df = pd.DataFrame(results)
+    results_df = pd.DataFrame(results)
 
-            # Summary Metrics
-            col1, col2, col3 = st.columns(3)
-            with col1:
-                pos_ev = len([r for r in results if r['ev'] > 0])
-                st.metric("Positive EV Props", pos_ev)
-            with col2:
-                avg_ev = sum(r['ev'] for r in results) / len(results)
-                st.metric("Average EV", f"{avg_ev * 100:.1f}¢")
-            with col3:
-                top_ev = max(results, key=lambda x: x['ev'])
-                st.metric("Top EV", f"{top_ev['ev'] * 100:.1f}¢")
+    # Summary Metrics
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        pos_ev = len([r for r in results if r['ev'] > 0])
+        st.metric("Positive EV Props", pos_ev)
+    with col2:
+        avg_ev = sum(r['ev'] for r in results) / len(results)
+        st.metric("Average EV", f"{avg_ev * 100:.1f}¢")
+    with col3:
+        top_ev = max(results, key=lambda x: x['ev'])
+        st.metric("Top EV", f"{top_ev['ev'] * 100:.1f}¢")
 
-            # Results Table
-            st.subheader("📊 All Results")
-            display_df = results_df[[
-                'player', 'stat', 'line', 'odds', 'projection', 'p_model', 'ev', 'n_games'
-            ]].copy()
+    # Results Table
+    st.subheader("📊 All Results")
+    display_df = results_df[[
+        'player', 'stat', 'line', 'odds', 'projection', 'p_model', 'ev', 'n_games'
+    ]].copy()
 
-            display_df['p_model'] = (display_df['p_model'] * 100).round(1)
-            display_df['ev'] = (display_df['ev'] * 100).round(1)
-            display_df['projection'] = display_df['projection'].round(1)
+    display_df['p_model'] = (display_df['p_model'] * 100).round(1)
+    display_df['ev'] = (display_df['ev'] * 100).round(1)
+    display_df['projection'] = display_df['projection'].round(1)
 
-            display_df.rename(columns={
-                'player': 'Player',
-                'stat': 'Stat',
-                'line': 'Line',
-                'odds': 'Odds',
-                'projection': 'Proj',
-                'p_model': 'Model%',
-                'ev': 'EV(¢)',
-                'n_games': 'Games'
-            }, inplace=True)
+    display_df.rename(columns={
+        'player': 'Player',
+        'stat': 'Stat',
+        'line': 'Line',
+        'odds': 'Odds',
+        'projection': 'Proj',
+        'p_model': 'Model%',
+        'ev': 'EV(¢)',
+        'n_games': 'Games'
+    }, inplace=True)
 
-            st.dataframe(
-                display_df.sort_values('EV(¢)', ascending=False),
-                use_container_width=True,
-                height=400
-            )
+    st.dataframe(
+        display_df.sort_values('EV(¢)', ascending=False),
+        use_container_width=True,
+        height=400
+    )
 
-            # Export button
-            if st.button("💾 Generate Excel Dashboard"):
-                with st.spinner("Generating Excel..."):
-                    pe.export_results_to_excel(results_df)
-                    st.success("✅ Excel file generated in /output folder!")
-        else:
-            st.error("❌ No valid results generated. Double-check your inputs.")
+    # Export button
+    if st.button("💾 Generate Excel Dashboard"):
+        with st.spinner("Generating Excel..."):
+            pe.export_results_to_excel(results_df)
+            st.success("✅ Excel file generated in /output folder!")
+
+else:
+    st.error("❌ No valid results generated. Double-check your inputs.")
+
 
 # ==========================================
 # FOOTER

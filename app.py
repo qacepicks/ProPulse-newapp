@@ -416,20 +416,34 @@ else:
         results = []
 
         for i, entry in enumerate(manual_entries):
-            status_text.text(f"Analyzing {i+1}/{len(manual_entries)}: {entry['player']}...")
-            progress_bar.progress((i + 1) / len(manual_entries))
-            try:
-                result = pe.analyze_single_prop(
-                    entry["player"],
-                    entry["stat"],
-                    entry["line"],
-                    entry["odds"],
-                    settings
-                )
-                if result:
-                    results.append(result)
-            except Exception as e:
-                st.warning(f"⚠️ Skipped {entry['player']}: {str(e)}")
+    status_text.text(f"Analyzing {i+1}/{len(manual_entries)}: {entry['player']}...")
+    progress_bar.progress((i + 1) / len(manual_entries))
+    try:
+        # Convert inputs to proper numeric types
+        try:
+            line_val = float(entry["line"])
+        except ValueError:
+            line_val = 0.0
+
+        try:
+            odds_val = int(entry["odds"])
+        except ValueError:
+            odds_val = -110
+
+        # Run the model
+        result = pe.analyze_single_prop(
+            entry["player"],
+            entry["stat"],
+            line_val,
+            odds_val,
+            settings
+        )
+
+        if result:
+            results.append(result)
+
+    except Exception as e:
+        st.warning(f"⚠️ Skipped {entry['player']}: {str(e)}")
 
         progress_bar.empty()
         status_text.empty()

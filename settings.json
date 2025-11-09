@@ -1,0 +1,9 @@
+{
+    "default_sportsbook": "Fliff",
+    "default_region": "us",
+    "data_path": "data/",
+    "injury_api_key": "YOUR_SPORTSDATAIO_KEY",
+    "balldontlie_api_key": "642d8995-44d0-4c58-b051-d32e72cf6036",
+    "odds_api_key": "34c819e4f42929e45022ebad64d03032",
+    "cache_hours": 24
+}

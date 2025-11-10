@@ -12,7 +12,12 @@ from scipy.stats import norm
 import os, json, time, math
 from datetime import datetime, timezone
 from dvp_updater import load_dvp_data
+from nba_api.stats.endpoints import scoreboardv2
+import pytz
 import math
+import glob
+import platform
+import subprocess
 import sys
 print("DEBUG: stdin.isatty() =", sys.stdin.isatty())
 
@@ -1014,6 +1019,27 @@ def get_dvp_multiplier(opponent_abbr, position, stat_key):
         print(f"[DvP] ❌ Error calculating multiplier: {e}")
         return 1.0
 
+def get_today_opponent(team_abbr):
+    """
+    Get today's opponent for a given team using the official NBA Scoreboard.
+    Ensures the matchup context reflects today's real schedule.
+    """
+    try:
+        today = datetime.now(pytz.timezone("US/Eastern")).strftime("%Y-%m-%d")
+        board = scoreboardv2.ScoreboardV2(game_date=today)
+        games = board.get_normalized_dict().get("GameHeader", [])
+        
+        for g in games:
+            home = g.get("HOME_TEAM_ABBREVIATION")
+            away = g.get("VISITOR_TEAM_ABBREVIATION")
+            if home == team_abbr:
+                return away
+            elif away == team_abbr:
+                return home
+        return None
+    except Exception as e:
+        print(f"[Opponent] ⚠️ Could not fetch today's opponent: {e}")
+        return None
 
 # ===============================
 # 🔍 DEBUG HELPER
@@ -1122,7 +1148,6 @@ def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
                 settings=settings,
                 include_last_season=INCLUDE_LAST_SEASON
             )
-        
         if df is None or len(df) == 0:
             print(f"[Logs] ❌ Could not fetch logs for {player}.")
             return None
@@ -1137,7 +1162,7 @@ def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
             if isinstance(val, str) and ":" in val:
                 try:
                     m, s = val.split(":")
-                    return int(m) + int(s)/60
+                    return int(m) + int(s) / 60
                 except:
                     return 0.0
             try:
@@ -1156,8 +1181,23 @@ def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
 
     inj = get_injury_status(player, settings.get("injury_api_key"))
     pos = get_player_position_auto(player, df_logs=df, settings=settings)
-    opp = get_upcoming_opponent_abbr(player, settings=settings)
-    
+
+    # --- Get correct opponent (FIXED: keep inside function and properly indented) ---
+    opp = None
+    team_abbr = None
+    try:
+        player_data = get_bdl("/players", {"search": player.split()[-1]}, settings)
+        if player_data and "data" in player_data and len(player_data["data"]) > 0:
+            player_info = player_data["data"][0]
+            team_abbr = player_info.get("team", {}).get("abbreviation", None)
+    except Exception as e:
+        print(f"[Opponent] ⚠️ Error getting player team: {e}")
+
+    if team_abbr:
+        opp = get_today_opponent(team_abbr)
+    if not opp:
+        opp = get_upcoming_opponent_abbr(player, settings=settings)
+
     dvp_mult = get_dvp_multiplier(opp, pos, stat) if opp else 1.0
 
     if debug_mode:
@@ -1196,180 +1236,6 @@ def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
     }
 
 
-
-def batch_analyze_props(props_list, settings):
-    """Analyze multiple props and return sorted by EV"""
-    results = []
-    for i, prop in enumerate(props_list, 1):
-        print(f"\n{'='*60}")
-        print(f"Analyzing prop {i}/{len(props_list)}: {prop['player']} {prop['stat']} {prop['line']}")
-        print(f"{'='*60}")
-        result = analyze_single_prop(
-            prop['player'],
-            prop['stat'],
-            prop['line'],
-            prop['odds'],
-            settings
-        )
-        if result:
-            results.append(result)
-    results.sort(key=lambda x: x['ev'], reverse=True)
-    return results
-
-def main(player=None, stat=None, line=None, odds=None, silent=False):
-    settings = load_settings()
-    
-    # --- PRIORITY 1: Auto-bypass menu if running from automation with a CSV ---
-    import sys
-    import glob
-    
-    # Check if CSV was passed as argument OR auto-detect
-    csv_path = None
-    if len(sys.argv) > 1 and sys.argv[1].endswith(".csv"):
-        csv_path = sys.argv[1]
-    else:
-        # Auto-detect the newest CSV
-        csv_files = sorted(glob.glob("auto_props_*.csv"), key=os.path.getmtime, reverse=True)
-        if csv_files:
-            csv_path = csv_files[0]
-    
-    # If we found a CSV, process it immediately
-    if csv_path and os.path.exists(csv_path):
-        print("🧠 PropPulse+ Model v2025.3 — Player Prop EV Analyzer")
-        print("==============================\n")
-        print(f"📂 Auto-detected CSV: {csv_path}\n")
-        
-        import pandas as pd
-        try:
-            props_df = pd.read_csv(csv_path)
-            props = props_df.to_dict("records")
-            print(f"⏳ Analyzing {len(props)} props...\n")
-            results = batch_analyze_props(props, settings)
-            
-            if results:
-                print(f"\n✅ Analysis complete! Found {len(results)} valid props")
-                df = pd.DataFrame(results)
-                export_results_to_excel(df)
-            else:
-                print("No valid results to display.")
-            return results
-        except Exception as e:
-            print(f"❌ Error processing CSV: {e}")
-            import traceback
-            traceback.print_exc()
-            return None
-    
-    # --- PRIORITY 2: Interactive menu (only if no CSV found) ---
-    print("🧠 PropPulse+ Model v2025.3 — Player Prop EV Analyzer")
-    print("==============================\n")
-
-    # --- Streamlit / Silent Mode ---
-    if player and stat and line is not None and odds is not None:
-        result = analyze_single_prop(player, stat, line, odds, settings)
-        if not result:
-            return {"Player": player, "Output": "No data returned"}
-
-        p_model = result.get("p_model", 0)
-        p_book = result.get("p_book", 0)
-        ev = result.get("ev", 0)
-        proj_stat = result.get("projection", 0)
-        n_games = result.get("n_games", 0)
-
-        # Return structured JSON for Streamlit
-        if silent:
-            return {
-                "Player": player,
-                "Stat": stat,
-                "Line": line,
-                "Odds": odds,
-                "Projection": round(proj_stat, 2),
-                "ModelProb%": f"{p_model * 100:.2f}%",
-                "BookProb%": f"{p_book * 100:.2f}%",
-                "EV_per_$1": f"{ev * 100:.1f}¢",
-                "Edge%": f"{(p_model - p_book) * 100:.2f}%",
-                "Opponent": result.get('opponent', 'N/A'),
-                "Position": result.get('position', 'N/A'),
-                "DvP": round(result.get('dvp_mult', 1.0), 3),
-                "GamesAnalyzed": n_games,
-                "InjuryStatus": result.get('injury', 'N/A'),
-                "Result": "🟢 OVER Value" if proj_stat > line else "🔴 UNDER Value"
-            }
-
-        # Normal terminal printout
-        print("\n==============================")
-        print(f"📊 {player} | {stat} Line {line}")
-        print(f"Games Analyzed: {n_games}")
-        print(f"Model Prob:  {p_model * 100:.1f}%")
-        print(f"Book Prob:   {p_book * 100:.1f}%")
-        print(f"Model Projection: {proj_stat:.1f} {stat}")
-        print(f"EV:          {ev * 100:.1f}¢ per $1 | {'🔥 Positive' if ev > 0 else '⚠️ Negative'}")
-        print("🟢 Over Value" if proj_stat > line else "🔴 Under Value")
-        print("==============================\n")
-        return
-
-    # --- Interactive CLI Mode (manual use only) ---
-    mode = input("Mode: [1] Single Prop or [2] Batch Analysis (default=1): ").strip() or "1"
-
-    if mode == "2":
-        print("\n📋 BATCH MODE: Enter props one by one (blank player name when done)")
-        props_list = []
-        while True:
-            print(f"\n--- Prop #{len(props_list) + 1} ---")
-            player = input("Player name (or press Enter to finish): ").strip()
-            if not player:
-                break
-            stat = input("Stat (PTS/REB/AST/REB+AST/PRA/FG3M): ").strip().upper()
-            line = float(input("Line: "))
-            odds = int(input("Odds (e.g. -110): "))
-            props_list.append({
-                "player": player,
-                "stat": stat,
-                "line": line,
-                "odds": odds
-            })
-
-        if not props_list:
-            print("No props entered. Exiting.")
-            return
-
-        print(f"\n⏳ Analyzing {len(props_list)} props...")
-        results = batch_analyze_props(props_list, settings)
-        if results:
-            print(f"\n✅ Analysis complete! Found {len(results)} valid props")
-            print("="*80)
-            interactive_display(results)
-        else:
-            print("No valid results to display.")
-        return
-
-    # --- Single CLI Run ---
-    player = input("Player name: ").strip()
-    stat = input("Stat (PTS / REB / AST / REB+AST / PRA / FG3M): ").strip().upper()
-    line = float(input("Line: "))
-    odds = int(input("Sportsbook odds (e.g. -110): "))
-    debug_mode = input("Enable debug mode? (y/n, default=n): ").strip().lower() == 'y'
-
-    result = analyze_single_prop(player, stat, line, odds, settings, debug_mode)
-    if not result:
-        return
-
-    p_model = result['p_model']
-    p_book = result['p_book']
-    ev = result['ev']
-    proj_stat = result['projection']
-    n_games = result['n_games']
-
-    print("\n==============================")
-    print(f"📊 {player} | {stat} Line {line}")
-    print(f"Games Analyzed: {n_games}")
-    print(f"Model Prob:  {p_model * 100:.1f}%")
-    print(f"Book Prob:   {p_book * 100:.1f}%")
-    print(f"Model Projection: {proj_stat:.1f} {stat}")
-    print(f"EV:          {ev * 100:.1f}¢ per $1 | {'🔥 Positive' if ev > 0 else '⚠️ Negative'}")
-    print("🟢 Over Value" if proj_stat > line else "🔴 Under Value")
-    print("==============================\n")
-
-
 # ===============================
 # EXPORT HANDLER (PropPulse Dashboard Edition)
 # ===============================
@@ -1378,7 +1244,8 @@ def export_results_to_excel(df):
     from openpyxl import load_workbook
     from openpyxl.styles import PatternFill, Font, Alignment
     from openpyxl.formatting.rule import ColorScaleRule
-    
+    import platform, subprocess  # <-- ensure available here
+
     output_dir = "output"
     os.makedirs(output_dir, exist_ok=True)
 
@@ -1440,12 +1307,7 @@ def export_results_to_excel(df):
         cell.fill = PatternFill(start_color="404040", end_color="404040", fill_type="solid")
         cell.alignment = Alignment(horizontal="center")
 
-    color_map = {
-        "ELITE": "00C0A87E",
-        "SOLID": "00FFD966",
-        "FADE": "00E06666",
-        "NEUTRAL": "00D9D9D9"
-    }
+    color_map = {"ELITE": "00C0A87E", "SOLID": "00FFD966", "FADE": "00E06666", "NEUTRAL": "00D9D9D9"}
 
     tier_col = [c.column for c in ws[1] if c.value == "Tier"][0]
     for row in range(2, ws.max_row + 1):
@@ -1497,25 +1359,21 @@ def export_results_to_excel(df):
 
 
 # ===============================
-# BATCH ANALYSIS FUNCTION
+# BATCH ANALYSIS FUNCTION (single, de-duplicated)
 # ===============================
 def batch_analyze_props(props_list, settings):
     """Analyze multiple props and return sorted by EV"""
     results = []
     total = len(props_list)
-    
+
     for i, prop in enumerate(props_list, 1):
         print(f"\n{'='*60}")
         print(f"Analyzing prop {i}/{total}: {prop['player']} {prop['stat']} {prop['line']}")
         print(f"{'='*60}")
-        
+
         try:
             result = analyze_single_prop(
-                prop['player'],
-                prop['stat'],
-                prop['line'],
-                prop['odds'],
-                settings
+                prop['player'], prop['stat'], prop['line'], prop['odds'], settings
             )
             if result:
                 results.append(result)
@@ -1525,25 +1383,26 @@ def batch_analyze_props(props_list, settings):
         except Exception as e:
             print(f"❌ Error analyzing {prop['player']}: {e}")
             continue
-    
+
     results.sort(key=lambda x: x['ev'], reverse=True)
     return results
 
 
 def find_latest_csv():
     """Find the most recent auto_props_*.csv file"""
+    import glob
     try:
         csv_files = glob.glob("auto_props_*.csv")
         if not csv_files:
             return None
-        
+
         csv_files.sort(key=os.path.getmtime, reverse=True)
         latest = csv_files[0]
-        
+
         age_hours = (time.time() - os.path.getmtime(latest)) / 3600
         if age_hours > 24:
             print(f"⚠️ Latest CSV is {age_hours:.1f} hours old - may be stale")
-        
+
         return latest
     except Exception as e:
         print(f"⚠️ Error finding CSV: {e}")
@@ -1555,44 +1414,44 @@ def run_csv_batch_mode(csv_path):
     print("🧠 PropPulse+ Model v2025.3 — Batch Mode")
     print("="*60)
     print(f"📂 Processing: {csv_path}\n")
-    
+
     settings = load_settings()
-    
+
     try:
         df = pd.read_csv(csv_path)
         print(f"✅ Loaded {len(df)} props from CSV")
-        
+
         required = ['player', 'stat', 'line', 'odds']
         missing = [col for col in required if col not in df.columns]
-        
+
         if missing:
             print(f"❌ CSV missing required columns: {missing}")
             print(f"   Found columns: {list(df.columns)}")
             return None
-        
+
         props = df.to_dict('records')
-        
+
     except Exception as e:
         print(f"❌ Error reading CSV: {e}")
         import traceback
         traceback.print_exc()
         return None
-    
+
     print(f"\n⏳ Starting analysis of {len(props)} props...\n")
     results = batch_analyze_props(props, settings)
-    
+
     if results:
         print(f"\n✅ Analysis complete! {len(results)}/{len(props)} props analyzed successfully")
-        
+
         results_df = pd.DataFrame(results)
         export_results_to_excel(results_df)
-        
+
         print("\n📊 Quick Summary:")
         print(f"   Positive EV props: {len([r for r in results if r['ev'] > 0])}")
         print(f"   Average EV: {sum(r['ev'] for r in results) / len(results) * 100:.1f}¢")
-        print(f"   Top EV: {max(results, key=lambda x: x['ev'])['player']} "
-              f"({max(r['ev'] for r in results) * 100:.1f}¢)")
-        
+        top_ev = max(results, key=lambda x: x['ev'])
+        print(f"   Top EV: {top_ev['player']} ({top_ev['ev']*100:.1f}¢)")
+
         return results
     else:
         print("\n❌ No valid results to export")
@@ -1601,35 +1460,31 @@ def run_csv_batch_mode(csv_path):
 
 def main(player=None, stat=None, line=None, odds=None, silent=False):
     """Main entry point with proper CSV auto-detection"""
-    
     settings = load_settings()
-    
+
     # Check for CSV argument
     csv_path = None
-    
     if len(sys.argv) > 1 and sys.argv[1].endswith('.csv'):
         csv_path = sys.argv[1]
         if not os.path.exists(csv_path):
             print(f"❌ CSV file not found: {csv_path}")
             return None
-    
     elif sys.stdin.isatty():
         csv_path = find_latest_csv()
         if csv_path:
             response = input(f"📂 Found recent CSV: {csv_path}\n   Use it for batch analysis? (y/n): ").strip().lower()
             if response != 'y':
                 csv_path = None
-    
+
     if csv_path:
         return run_csv_batch_mode(csv_path)
-    
+
     # Programmatic/silent mode
     if player and stat and line is not None and odds is not None:
         result = analyze_single_prop(player, stat, line, odds, settings)
-        
         if not result:
             return {"Player": player, "Output": "No data returned"}
-        
+
         if silent:
             return {
                 "Player": player,
@@ -1648,7 +1503,7 @@ def main(player=None, stat=None, line=None, odds=None, silent=False):
                 "InjuryStatus": result.get('injury', 'N/A'),
                 "Result": "🟢 OVER Value" if result['projection'] > line else "🔴 UNDER Value"
             }
-        
+
         print("\n" + "="*60)
         print(f"📊 {player} | {stat} Line {line}")
         print(f"Games Analyzed: {result['n_games']}")
@@ -1659,48 +1514,37 @@ def main(player=None, stat=None, line=None, odds=None, silent=False):
         print("🟢 Over Value" if result['projection'] > line else "🔴 Under Value")
         print("="*60 + "\n")
         return result
-    
+
     # Interactive CLI
     print("🧠 PropPulse+ Model v2025.3 — Player Prop EV Analyzer")
     print("="*60 + "\n")
-    
+
     mode = input("Mode: [1] Single Prop or [2] Batch Entry (default=1): ").strip() or "1"
-    
+
     if mode == "2":
         print("\n📋 BATCH MODE: Enter props one by one (blank player name when done)")
         props_list = []
-        
         while True:
             print(f"\n--- Prop #{len(props_list) + 1} ---")
             player = input("Player name (or press Enter to finish): ").strip()
-            
             if not player:
                 break
-            
             try:
                 stat = input("Stat (PTS/REB/AST/REB+AST/PRA/FG3M): ").strip().upper()
                 line = float(input("Line: "))
                 odds = int(input("Odds (e.g. -110): "))
-                
-                props_list.append({
-                    "player": player,
-                    "stat": stat,
-                    "line": line,
-                    "odds": odds
-                })
+                props_list.append({"player": player, "stat": stat, "line": line, "odds": odds})
                 print(f"✅ Added: {player} {stat} {line} ({odds})")
-                
             except ValueError as e:
                 print(f"❌ Invalid input: {e}")
                 continue
-        
+
         if not props_list:
             print("No props entered. Exiting.")
             return None
-        
+
         print(f"\n⏳ Analyzing {len(props_list)} props...")
         results = batch_analyze_props(props_list, settings)
-        
         if results:
             print(f"\n✅ Analysis complete! Found {len(results)} valid props")
             df = pd.DataFrame(results)
@@ -1708,22 +1552,20 @@ def main(player=None, stat=None, line=None, odds=None, silent=False):
             interactive_display(results)
         else:
             print("No valid results to display.")
-        
         return results
-    
+
     # Single prop mode
     player = input("Player name: ").strip()
     stat = input("Stat (PTS/REB/AST/REB+AST/PRA/FG3M): ").strip().upper()
     line = float(input("Line: "))
     odds = int(input("Sportsbook odds (e.g. -110): "))
     debug_mode = input("Enable debug mode? (y/n, default=n): ").strip().lower() == 'y'
-    
+
     result = analyze_single_prop(player, stat, line, odds, settings, debug_mode)
-    
     if not result:
         print("❌ Analysis failed")
         return None
-    
+
     print("\n" + "="*60)
     print(f"📊 {player} | {stat} Line {line}")
     print(f"Games Analyzed: {result['n_games']}")
@@ -1733,7 +1575,7 @@ def main(player=None, stat=None, line=None, odds=None, silent=False):
     print(f"EV: {result['ev'] * 100:.1f}¢ per $1 | {'🔥 Positive' if result['ev'] > 0 else '⚠️ Negative'}")
     print("🟢 Over Value" if result['projection'] > line else "🔴 Under Value")
     print("="*60 + "\n")
-    
+
     return result
 
 
@@ -1760,6 +1602,7 @@ if __name__ == "__main__":
             import traceback
             traceback.print_exc()
             sys.exit(1)
+
 
 
 

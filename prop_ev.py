@@ -1123,56 +1123,210 @@ def debug_projection(df, stat="REB+AST", line=12.5, player_name=""):
     
     print("="*60 + "\n")
 
+from nba_api.stats.static import players, teams
+from nba_api.stats.endpoints import scoreboardv2
+import requests, pytz
+from datetime import datetime, timedelta
 
-# ===============================
-# MAIN
-# ===============================
 def get_live_opponent_from_schedule(player_name):
     """
-    Fetch today's opponent using NBA API — no BallDontLie dependency.
-    Works for any player by matching their team in today's official games.
+    Checks NBA_API scoreboard first; if missing, falls back to NBA.com's JSON schedule.
+    Now correctly handles late-night games across time zones and filters for FUTURE games only.
     """
     try:
+        # --- Player → Team ---
         player_info = players.find_players_by_full_name(player_name)
-        if not player_info:
-            print(f"[Opponent] ⚠️ Could not find player: {player_name}")
-            return None, None
-
-        player_info = player_info[0]
-        team_id = player_info.get("team_id")
         team_abbr = None
 
-        # Match team abbreviation
-        all_teams = teams.get_teams()
-        for t in all_teams:
-            if t["id"] == team_id:
-                team_abbr = t["abbreviation"]
-                break
+        if player_info:
+            player_info = player_info[0]
+            team_id = player_info.get("team_id")
+            if team_id:
+                team_abbr = next(
+                    (t["abbreviation"] for t in teams.get_teams() if t["id"] == team_id),
+                    None
+                )
 
+        # Manual fallback map
         if not team_abbr:
-            print(f"[Opponent] ⚠️ Could not find team for {player_name}")
-            return None, None
+            team_map = {
+                "Malik Monk": "SAC", "De'Aaron Fox": "SAC", "Domantas Sabonis": "SAC",
+                "Anthony Edwards": "MIN", "Karl-Anthony Towns": "MIN",
+                "LeBron James": "LAL", "Austin Reaves": "LAL"
+            }
+            team_abbr = team_map.get(player_name)
+            if not team_abbr:
+                print(f"[Opponent] ⚠️ Could not find team for {player_name}")
+                return None, None
+            print(f"[Opponent] 🧩 Using manual team mapping → {team_abbr}")
 
-        # Pull today’s NBA scoreboard
-        today = datetime.now(pytz.timezone("US/Eastern")).strftime("%Y-%m-%d")
-        board = scoreboardv2.ScoreboardV2(game_date=today)
-        games = board.get_normalized_dict().get("GameHeader", [])
+        # --- Step 1: Try NBA_API scoreboard (check today AND tomorrow) ---
+        eastern = pytz.timezone("US/Eastern")
+        eastern_now = datetime.now(eastern)
+        
+        # Get local time for better debugging
+        local_now = datetime.now()
+        print(f"[Opponent] 🕐 Current time: Local={local_now.strftime('%Y-%m-%d %H:%M')} | Eastern={eastern_now.strftime('%Y-%m-%d %H:%M')} ET")
+        
+        dates_to_check = [
+            eastern_now.strftime("%Y-%m-%d"),
+            (eastern_now + timedelta(days=1)).strftime("%Y-%m-%d")
+        ]
 
-        for g in games:
-            home = g["HOME_TEAM_ABBREVIATION"]
-            away = g["VISITOR_TEAM_ABBREVIATION"]
-            if home == team_abbr:
-                return away, team_abbr
-            elif away == team_abbr:
-                return home, team_abbr
+        for d in dates_to_check:
+            try:
+                board = scoreboardv2.ScoreboardV2(game_date=d)
+                games = board.get_normalized_dict().get("GameHeader", [])
+                for g in games:
+                    home = g.get("HOME_TEAM_ABBREVIATION")
+                    away = g.get("VISITOR_TEAM_ABBREVIATION")
+                    if home == team_abbr:
+                        print(f"[Opponent] ✅ Found matchup via NBA_API: {team_abbr} vs {away} ({d})")
+                        return away, team_abbr
+                    elif away == team_abbr:
+                        print(f"[Opponent] ✅ Found matchup via NBA_API: {team_abbr} @ {home} ({d})")
+                        return home, team_abbr
+            except Exception as e:
+                print(f"[Opponent] ⚠️ NBA_API scoreboard failed for {d}: {e}")
 
-        print(f"[Opponent] ⚠️ No matchup found for {team_abbr} today.")
+        # --- Step 2: Fallback — NBA.com JSON Schedule ---
+        print("[Opponent] 🔄 Fallback: Checking NBA.com schedule feed...")
+        sched_url = "https://cdn.nba.com/static/json/staticData/scheduleLeagueV2.json"
+        r = requests.get(sched_url, timeout=10)
+        data = r.json()
+
+        # Only look at today and next 2 days
+        # BUT: Use a more lenient check since NBA.com timestamps can be off
+        date_range = [
+            (eastern_now + timedelta(days=offset)).date() 
+            for offset in range(-1, 3)  # Include yesterday to catch mislabeled late games
+        ]
+
+        print(f"[Opponent] 🔍 Checking dates: {[str(d) for d in date_range]}")
+
+        # Find all matching games and sort by time
+        matching_games = []
+        
+        for game_date_group in data.get("leagueSchedule", {}).get("gameDates", []):
+            try:
+                # Each gameDates entry has a "games" array
+                for game in game_date_group.get("games", []):
+                    # Parse game date from the individual game object
+                    game_date_str = game.get("gameDateEst", "")
+                    if not game_date_str:
+                        continue
+                    
+                    game_datetime = datetime.fromisoformat(game_date_str.replace("Z", "+00:00"))
+                    game_date = game_datetime.date()
+                    
+                    # Only check games within our date range
+                    if game_date not in date_range:
+                        continue
+                    
+                    home = game.get("homeTeam", {}).get("teamTricode")
+                    away = game.get("awayTeam", {}).get("teamTricode")
+                    
+                    if team_abbr in [home, away]:
+                        opp = away if home == team_abbr else home
+                        matching_games.append({
+                            'datetime': game_datetime,
+                            'opponent': opp,
+                            'date': game_date,
+                            'home': home,
+                            'away': away
+                        })
+            except Exception as e:
+                print(f"[Opponent] ⚠️ Error parsing game: {e}")
+                continue
+        
+        # Return the next upcoming game (sorted by datetime)
+        if matching_games:
+            # Sort by datetime and get the first game that hasn't started yet
+            matching_games.sort(key=lambda x: x['datetime'])
+            
+            print(f"[Opponent] 📋 Found {len(matching_games)} game(s) for {team_abbr}")
+            
+            for match in matching_games:
+                time_until_game = (match['datetime'] - eastern_now).total_seconds() / 3600
+                
+                print(f"[Opponent]    • {match['away']} @ {match['home']} on {match['date']} (in {time_until_game:.1f}h)")
+                
+                match['time_until'] = time_until_game
+            
+            # First priority: Check if any game is TODAY (catches timestamp bugs)
+            todays_games = [g for g in matching_games if g['date'] == eastern_now.date()]
+            
+            if todays_games:
+                # If there's a game today, use it (regardless of timestamp)
+                next_game = todays_games[0]
+                print(f"[Opponent] ✅ Found game TODAY: {team_abbr} vs {next_game['opponent']} (timestamp shows {next_game['time_until']:.1f}h)")
+                return next_game['opponent'], team_abbr
+            
+            # Second priority: Future games (sorted by soonest)
+            future_games = [g for g in matching_games if g['time_until'] > 0]
+            if future_games:
+                future_games.sort(key=lambda x: x['time_until'])
+                next_game = future_games[0]
+                print(f"[Opponent] ✅ Next game: {team_abbr} vs {next_game['opponent']} (in {next_game['time_until']:.1f}h)")
+                return next_game['opponent'], team_abbr
+            
+            # Third priority: Recent past games (within 4 hours - might be in progress)
+            recent_games = [g for g in matching_games if -4 <= g['time_until'] <= 0]
+            if recent_games:
+                recent_games.sort(key=lambda x: x['time_until'], reverse=True)  # Most recent first
+                next_game = recent_games[0]
+                print(f"[Opponent] ✅ Game in progress: {team_abbr} vs {next_game['opponent']} (started {abs(next_game['time_until']):.1f}h ago)")
+                return next_game['opponent'], team_abbr
+            
+            # Last resort: Just pick the closest game
+            matching_games.sort(key=lambda x: abs(x['time_until']))
+            next_game = matching_games[0]
+            print(f"[Opponent] ⚠️ Using closest game: {team_abbr} vs {next_game['opponent']} ({next_game['time_until']:.1f}h)")
+            return next_game['opponent'], team_abbr
+            
+            # If all games are in the past, return None
+            print(f"[Opponent] ⚠️ All {len(matching_games)} game(s) are in the past")
+            return None, team_abbr
+
+        print(f"[Opponent] ⚠️ {team_abbr} not found in schedule (checked {len(date_range)} days)")
         return None, team_abbr
 
     except Exception as e:
-        print(f"[Opponent] ❌ Error getting live opponent: {e}")
+        print(f"[Opponent] ❌ Error determining opponent: {e}")
+        import traceback
+        traceback.print_exc()
         return None, None
 
+        # --- 2. Cache today's scoreboard to avoid repeated API calls
+        today = datetime.now(pytz.timezone("US/Eastern")).strftime("%Y-%m-%d")
+        if _cached_scoreboard["date"] != today:
+            print(f"[Opponent] 🔄 Fetching NBA scoreboard for {today}")
+            try:
+                board = scoreboardv2.ScoreboardV2(game_date=today)
+                _cached_scoreboard["games"] = board.get_normalized_dict().get("GameHeader", [])
+                _cached_scoreboard["date"] = today
+            except Exception as e:
+                print(f"[Opponent] ⚠️ Error fetching NBA scoreboard: {e}")
+                _cached_scoreboard["games"] = []
+
+        # --- 3. Search for player's team in today's games
+        for g in _cached_scoreboard["games"]:
+            home = g.get("HOME_TEAM_ABBREVIATION")
+            away = g.get("VISITOR_TEAM_ABBREVIATION")
+            if home == team_abbr:
+                print(f"[Opponent] ✅ Today: {team_abbr} vs {away}")
+                return away, team_abbr
+            elif away == team_abbr:
+                print(f"[Opponent] ✅ Today: {team_abbr} @ {home}")
+                return home, team_abbr
+
+        # --- 4. No game today → return None (no fallback yet)
+        print(f"[Opponent] ⚠️ {team_abbr} not playing today.")
+        return None, team_abbr
+
+    except Exception as e:
+        print(f"[Opponent] ❌ Error determining opponent: {e}")
+        return None, None
 
 def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
     """Analyze a single prop and return results dict"""
@@ -1227,15 +1381,24 @@ def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
     avg_mins = df["MIN"].mean() if "MIN" in df.columns and len(df["MIN"]) > 0 else 30
     proj_mins = avg_mins
 
+            # --- Injury and position ---
     inj = get_injury_status(player, settings.get("injury_api_key"))
     pos = get_player_position_auto(player, df_logs=df, settings=settings)
 
-    # --- Get correct opponent using live NBA schedule ---
-    opp, team_abbr = get_live_opponent_from_schedule(player)
-    if not opp:
-        opp = get_upcoming_opponent_abbr(player, settings=settings)
+       # --- Get correct opponent using live NBA schedule (today only) ---
+    USE_FALLBACK_NEXT_GAME = False  # set True only if you want next game when no game today
 
-    # If no opponent found, skip DvP to avoid stale data
+    opp, team_abbr = get_live_opponent_from_schedule(player)
+
+    if opp is None:
+        if USE_FALLBACK_NEXT_GAME:
+            print("[Opponent] ℹ️ No game today; falling back to next scheduled opponent…")
+            opp = get_upcoming_opponent_abbr(player, settings=settings)
+        else:
+            print("[Opponent] ℹ️ No game today; skipping DvP weighting.")
+            opp = None  # ensure we don't apply any stale DvP
+
+    # Skip DvP weighting if opponent unavailable
     dvp_mult = get_dvp_multiplier(opp, pos, stat) if opp else 1.0
 
     if debug_mode:
@@ -1249,7 +1412,7 @@ def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
         print(f"[Model] Error: {e}")
         return None
 
-    # 🚨 Outlier filter (skip unrealistic gaps)
+    # 🚨 Outlier filter
     if abs(proj_stat - line) > 6:
         print(f"[Filter] ⚠️ Skipping {player} — Unrealistic gap ({proj_stat:.1f} vs line {line})")
         return None
@@ -1273,5 +1436,133 @@ def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
         "injury": inj
     }
 
+# ===============================
+# MAIN (stable interactive version)
+# ===============================
+def main():
+    settings = load_settings()
+
+    print("\n🧠 PropPulse+ Model v2025.3 — Player Prop EV Analyzer", flush=True)
+    print("=====================================================\n", flush=True)
+
+    while True:
+        try:
+            mode = input("Mode [1] Single  [2] Batch (manual)  [3] CSV file  [Q] Quit: ").strip().lower()
+        except EOFError:
+            # If for some reason input stream closes, just exit cleanly
+            print("\n(Input stream closed) Exiting.")
+            return
+
+        if mode in ("q", "quit", "exit"):
+            print("Goodbye!")
+            return
+
+        if mode in ("1", ""):
+            # ---------- Single prop ----------
+            try:
+                player = input("Player name: ").strip()
+                stat = input("Stat (PTS/REB/AST/REB+AST/PRA/FG3M): ").strip().upper()
+                line = float(input("Line (e.g., 20.5): ").strip())
+                odds = int(input("Odds (e.g., -110): ").strip())
+                debug_mode = input("Enable debug mode? (y/n, default=n): ").strip().lower() == 'y'
+
+                result = analyze_single_prop(player, stat, line, odds, settings, debug_mode)
+                if not result:
+                    print("❌ Analysis returned no result.")
+                else:
+                    print("\n" + "="*60)
+                    print(f"📊 {player} | {stat} Line {line}")
+                    print(f"Games Analyzed: {result['n_games']}")
+                    print(f"Model Prob:  {result['p_model'] * 100:.1f}%")
+                    print(f"Book Prob:   {result['p_book'] * 100:.1f}%")
+                    print(f"Model Projection: {result['projection']:.1f} {stat}")
+                    print(f"EV: {result['ev'] * 100:.1f}¢ per $1 | {'🔥 Positive' if result['ev'] > 0 else '⚠️ Negative'}")
+                    print("🟢 Over Value" if result['projection'] > line else "🔴 Under Value")
+                    print(f"Context: {result.get('position','N/A')} vs {result.get('opponent','N/A')} • DvP: {result.get('dvp_mult',1.0):.3f}")
+                    print("="*60 + "\n")
+            except ValueError as ve:
+                print(f"❌ Invalid input: {ve}")
+            except Exception as e:
+                import traceback
+                print(f"❌ Error: {e}")
+                traceback.print_exc()
+
+        elif mode == "2":
+            # ---------- Batch (manual entry) ----------
+            print("\n📋 BATCH MODE: Enter props one by one (blank player = finish)")
+            props_list = []
+            while True:
+                player = input("\nPlayer name (or Enter to finish): ").strip()
+                if not player:
+                    break
+                try:
+                    stat = input("Stat (PTS/REB/AST/REB+AST/PRA/FG3M): ").strip().upper()
+                    line = float(input("Line: ").strip())
+                    odds = int(input("Odds (e.g., -110): ").strip())
+                    props_list.append({"player": player, "stat": stat, "line": line, "odds": odds})
+                    print(f"✅ Added: {player} {stat} {line} ({odds})")
+                except ValueError as ve:
+                    print(f"❌ Invalid input: {ve}")
+
+            if not props_list:
+                print("No props entered.")
+            else:
+                print(f"\n⏳ Analyzing {len(props_list)} props...")
+                try:
+                    results = batch_analyze_props(props_list, settings)
+                    if results:
+                        import pandas as _pd
+                        print(f"\n✅ Analysis complete! Found {len(results)} valid props")
+                        df = _pd.DataFrame(results)
+                        export_results_to_excel(df)
+                        interactive_display(results)
+                    else:
+                        print("No valid results to display.")
+                except Exception as e:
+                    import traceback
+                    print(f"❌ Batch error: {e}")
+                    traceback.print_exc()
+
+        elif mode == "3":
+            # ---------- CSV file path ----------
+            csv_path = input("Path to CSV file: ").strip().strip('"')
+            if not os.path.exists(csv_path):
+                print(f"❌ CSV not found: {csv_path}")
+            else:
+                try:
+                    _ = run_csv_batch_mode(csv_path)
+                except Exception as e:
+                    import traceback
+                    print(f"❌ CSV run error: {e}")
+                    traceback.print_exc()
+        else:
+            print("Please choose 1, 2, 3, or Q.")
+
+        # Small pause to keep the window open between runs
+        input("\nPress Enter to continue...")
 
 
+
+# ===============================
+# Program entry point
+# ===============================
+if __name__ == "__main__":
+    print("🧠 PropPulse+ Model v2025.3 — Player Prop EV Analyzer")
+    print("=" * 60, flush=True)
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n⚠️ Interrupted by user. Exiting...")
+    except Exception as e:
+        import traceback
+        print(f"\n❌ Fatal error: {e}")
+        traceback.print_exc()
+    finally:
+        # On Windows console, keep the window open if launched via double-click
+        try:
+            if sys.stdin.isatty():
+                pass  # running in an open console
+            else:
+                input("\nPress Enter to close...")
+        except Exception:
+            pass

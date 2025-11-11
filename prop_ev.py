@@ -1322,11 +1322,12 @@ except Exception as e:
     p_dvp = p_base * dvp_mult
     p_model = (p_base * w_base + p_l10 * w_l10 + p_ha * w_ha + p_dvp * w_dvp + p_usage * w_usage)
 
-        # ===============================
-    # 🎯 Confidence & Volatility Calibration — v2025.3a
-    # ===============================
-    base_conf = 1 - (std / mean) if mean > 0 else 0.5
-    confidence = max(0.1, base_conf * maturity)
+         # ===============================
+ # 🎯 Confidence & Volatility Calibration — v2025.3a
+ # ===============================
+ base_conf = 1 - (std / mean) if mean > 0 else 0.5
+ confidence = max(0.1, base_conf * maturity)
+
 
     # --- Volatility-based confidence boost (stable = more trust)
     if std > 0 and mean > 0:

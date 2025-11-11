@@ -527,6 +527,22 @@ def main():
         print(f"❌ Error: {str(e)}")
         import traceback
         traceback.print_exc()
+# =====================================================
+# 🌐 Compatibility Wrapper for PropPulse+ (v14)
+# =====================================================
+def fetch_player_data(player_name, api_key=None, days_window=20, save_dir="data"):
+    """
+    Compatibility wrapper for PropPulse EV model.
+    Returns recent player game data as a pandas DataFrame.
+    """
+    fetcher = NBAStatsFetcherBallDontLie(file_path="dummy.csv", api_key=api_key or "")
+    result = fetcher.fetch_player_game_stats(player_name, days_window=days_window)
+    
+    if result:
+        df = pd.DataFrame([result])
+        return df
+    else:
+        return pd.DataFrame()
 
 
 if __name__ == "__main__":

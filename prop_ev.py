@@ -1487,7 +1487,7 @@ def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
 
 
 
-    # --- Final output ---
+               # --- Final output ---
     direction = "Higher" if proj_stat > line else "Lower"
     result_symbol = "⚠️" if abs(proj_stat - line) < 0.5 else "✓" if direction == "Higher" else "✗"
 
@@ -1521,6 +1521,7 @@ def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
         "direction": direction,
         "result": result_symbol
     }
+
 
 
 # ================================================

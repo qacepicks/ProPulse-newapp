@@ -20,8 +20,11 @@ import glob
 import platform
 import subprocess
 import sys
+from nba_stats_fetcher import fetch_player_data as fetch_player_logs
+
 print("DEBUG: stdin.isatty() =", sys.stdin.isatty())
 from nba_api.stats.static import players, teams
+from nba_stats_fetcher import fetch_player_data as fetch_player_logs
 def get_live_opponent_from_schedule(player, settings=None):
     """
     Returns (opponent_abbr, team_abbr) for today's game using NBA live scoreboard.

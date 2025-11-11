@@ -1,6 +1,6 @@
 """
-PropPulse+ v2025.3 — Professional NBA Prop Analyzer
-Modern betting interface with dark theme
+PropPulse+ v2025.4 — Professional NBA Prop Analyzer
+Industrial UI with enhanced accessibility and new bet types
 """
 
 import streamlit as st
@@ -28,162 +28,408 @@ st.set_page_config(
 )
 
 # ==========================================
-# CUSTOM CSS - Modern Betting UI
+# CUSTOM CSS - Professional Industrial UI
 # ==========================================
 st.markdown("""
 <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
     
+    /* Force dark theme colors */
     .stApp {
-        background: linear-gradient(135deg, #0A0E27 0%, #1A1F3A 100%);
+        background: #0B0F19;
         font-family: 'Inter', sans-serif;
     }
     
+    /* Text contrast fix for light mode users */
+    .stApp, .stMarkdown, p, span, label, div {
+        color: #E5E7EB !important;
+    }
+    
+    h1, h2, h3, h4, h5, h6 {
+        color: #F9FAFB !important;
+        font-weight: 700 !important;
+    }
+    
+    /* Remove Streamlit branding */
     #MainMenu {visibility: hidden;}
     footer {visibility: hidden;}
+    header {visibility: hidden;}
     
+    /* Professional Header */
     .main-header {
-        text-align: center;
-        padding: 2rem 0 1rem 0;
+        background: linear-gradient(135deg, #1F2937 0%, #111827 100%);
+        border-bottom: 1px solid #374151;
+        padding: 1.5rem 2rem;
+        margin: -6rem -2rem 2rem -2rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3);
     }
     
-    .logo-text {
-        font-size: 42px;
-        font-weight: 700;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        letter-spacing: -1px;
+    .brand-container {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
     }
     
-    .tagline {
-        color: #8B92B0;
-        font-size: 14px;
-        margin-top: 0.5rem;
+    .brand-logo {
+        width: 48px;
+        height: 48px;
+        background: linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%);
+        border-radius: 12px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 24px;
+        font-weight: 800;
+        color: white;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
     }
     
+    .brand-text {
+        flex: 1;
+    }
+    
+    .brand-title {
+        font-size: 28px;
+        font-weight: 800;
+        color: #F9FAFB;
+        letter-spacing: -0.5px;
+        margin: 0;
+        line-height: 1;
+    }
+    
+    .brand-subtitle {
+        font-size: 13px;
+        color: #9CA3AF;
+        margin-top: 4px;
+        font-weight: 500;
+    }
+    
+    .status-badge {
+        background: #065F46;
+        color: #10B981;
+        padding: 6px 12px;
+        border-radius: 6px;
+        font-size: 12px;
+        font-weight: 600;
+        border: 1px solid #10B981;
+    }
+    
+    /* Sidebar Styling */
+    [data-testid="stSidebar"] {
+        background: #111827;
+        border-right: 1px solid #374151;
+    }
+    
+    [data-testid="stSidebar"] * {
+        color: #E5E7EB !important;
+    }
+    
+    /* Form Controls */
     .stTextInput > div > div > input,
     .stNumberInput > div > div > input,
     .stSelectbox > div > div > select {
-        background: rgba(255, 255, 255, 0.05);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 8px;
-        color: white;
+        background: #1F2937 !important;
+        border: 1px solid #374151 !important;
+        border-radius: 8px !important;
+        color: #F9FAFB !important;
+        font-weight: 500 !important;
+        padding: 12px 16px !important;
+        font-size: 15px !important;
     }
     
+    .stTextInput > div > div > input:focus,
+    .stNumberInput > div > div > input:focus,
+    .stSelectbox > div > div > select:focus {
+        border-color: #3B82F6 !important;
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1) !important;
+    }
+    
+    /* Labels */
+    .stTextInput > label,
+    .stNumberInput > label,
+    .stSelectbox > label {
+        color: #D1D5DB !important;
+        font-weight: 600 !important;
+        font-size: 13px !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        margin-bottom: 8px !important;
+    }
+    
+    /* Primary Button */
     .stButton > button {
         width: 100%;
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-        color: white;
+        background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%);
+        color: white !important;
         border: none;
-        border-radius: 10px;
-        padding: 14px 28px;
-        font-weight: 600;
-        font-size: 16px;
-        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        border-radius: 8px;
+        padding: 16px 24px;
+        font-weight: 700;
+        font-size: 15px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        transition: all 0.2s ease;
     }
     
-    .result-card {
-        background: rgba(255, 255, 255, 0.03);
-        border: 1px solid rgba(255, 255, 255, 0.1);
-        border-radius: 16px;
-        padding: 24px;
-        margin: 20px 0;
+    .stButton > button:hover {
+        background: linear-gradient(135deg, #2563EB 0%, #1D4ED8 100%);
+        box-shadow: 0 6px 16px rgba(59, 130, 246, 0.4);
+        transform: translateY(-1px);
     }
     
-    .metric-box {
-        background: rgba(255, 255, 255, 0.05);
+    /* Metric Cards */
+    .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin: 24px 0;
+    }
+    
+    .metric-card {
+        background: #1F2937;
+        border: 1px solid #374151;
         border-radius: 12px;
-        padding: 16px;
-        text-align: center;
-        margin: 8px;
+        padding: 20px;
+        transition: all 0.2s ease;
+    }
+    
+    .metric-card:hover {
+        border-color: #4B5563;
+        transform: translateY(-2px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.2);
     }
     
     .metric-label {
-        color: #8B92B0;
-        font-size: 12px;
-        font-weight: 600;
+        color: #9CA3AF;
+        font-size: 11px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        margin-bottom: 8px;
     }
     
     .metric-value {
-        color: white;
-        font-size: 24px;
-        font-weight: 700;
-        margin: 8px 0;
+        color: #F9FAFB;
+        font-size: 32px;
+        font-weight: 800;
+        line-height: 1;
+        margin-bottom: 8px;
+    }
+    
+    .metric-sublabel {
+        font-size: 13px;
+        font-weight: 500;
+        margin-top: 8px;
+    }
+    
+    .metric-positive {
+        color: #10B981;
+    }
+    
+    .metric-negative {
+        color: #EF4444;
+    }
+    
+    .metric-neutral {
+        color: #6B7280;
+    }
+    
+    /* EV Display */
+    .ev-container {
+        text-align: center;
+        padding: 32px;
+        background: #1F2937;
+        border: 2px solid #374151;
+        border-radius: 16px;
+        margin: 24px 0;
+    }
+    
+    .ev-badge {
+        display: inline-block;
+        padding: 16px 32px;
+        border-radius: 12px;
+        font-size: 28px;
+        font-weight: 800;
+        margin-bottom: 16px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
     }
     
     .ev-positive {
-        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        background: linear-gradient(135deg, #059669 0%, #10B981 100%);
         color: white;
-        padding: 12px 24px;
-        border-radius: 10px;
-        font-weight: 700;
-        display: inline-block;
+        border: 2px solid #10B981;
     }
     
     .ev-negative {
-        background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+        background: linear-gradient(135deg, #DC2626 0%, #EF4444 100%);
         color: white;
-        padding: 12px 24px;
-        border-radius: 10px;
+        border: 2px solid #EF4444;
+    }
+    
+    .recommendation {
+        color: #F9FAFB;
+        font-size: 20px;
         font-weight: 700;
-        display: inline-block;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+    }
+    
+    /* Info Cards */
+    .info-card {
+        background: #1F2937;
+        border: 1px solid #374151;
+        border-radius: 12px;
+        padding: 20px;
+        margin: 16px 0;
+    }
+    
+    .info-card strong {
+        color: #F9FAFB !important;
+        font-weight: 700;
+    }
+    
+    /* Data Tables */
+    [data-testid="stDataFrame"] {
+        background: #1F2937;
+        border-radius: 12px;
+        border: 1px solid #374151;
+    }
+    
+    /* Success/Error Messages */
+    .stSuccess {
+        background: #064E3B !important;
+        border: 1px solid #10B981 !important;
+        color: #D1FAE5 !important;
+        border-radius: 8px !important;
+    }
+    
+    .stError {
+        background: #7F1D1D !important;
+        border: 1px solid #EF4444 !important;
+        color: #FEE2E2 !important;
+        border-radius: 8px !important;
+    }
+    
+    .stWarning {
+        background: #78350F !important;
+        border: 1px solid #F59E0B !important;
+        color: #FEF3C7 !important;
+        border-radius: 8px !important;
+    }
+    
+    .stInfo {
+        background: #1E3A8A !important;
+        border: 1px solid #3B82F6 !important;
+        color: #DBEAFE !important;
+        border-radius: 8px !important;
+    }
+    
+    /* Progress Bar */
+    .stProgress > div > div {
+        background: #3B82F6 !important;
+    }
+    
+    /* Radio Buttons */
+    [data-testid="stRadio"] label {
+        color: #E5E7EB !important;
+        font-weight: 500 !important;
+    }
+    
+    /* Checkbox */
+    .stCheckbox label {
+        color: #E5E7EB !important;
+        font-weight: 500 !important;
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: #1F2937 !important;
+        border: 1px solid #374151 !important;
+        border-radius: 8px !important;
+        color: #F9FAFB !important;
+        font-weight: 600 !important;
+    }
+    
+    /* Section Dividers */
+    hr {
+        border-color: #374151 !important;
+        margin: 32px 0 !important;
+    }
+    
+    /* Footer */
+    .footer {
+        text-align: center;
+        padding: 32px 0;
+        color: #6B7280;
+        font-size: 13px;
+        border-top: 1px solid #374151;
+        margin-top: 48px;
     }
 </style>
+""", unsafe_allow_html=True)
+
+# ==========================================
+# PROFESSIONAL HEADER
+# ==========================================
+st.markdown("""
+<div class="main-header">
+    <div class="brand-container">
+        <div class="brand-logo">PP</div>
+        <div class="brand-text">
+            <div class="brand-title">PropPulse+</div>
+            <div class="brand-subtitle">Advanced NBA Player Prop Analytics</div>
+        </div>
+        <div class="status-badge">● LIVE</div>
+    </div>
+</div>
 """, unsafe_allow_html=True)
 
 # ==========================================
 # SIDEBAR - MODE SELECTION
 # ==========================================
 with st.sidebar:
-    st.markdown("### 🏀 PropPulse+")
+    st.markdown("### ⚙️ Analysis Settings")
     st.markdown("---")
     
     mode = st.radio(
-        "Analysis Mode",
-        ["🎯 Single Prop", "📊 Batch Manual Entry"],
+        "Select Mode",
+        ["🎯 Single Prop Analysis", "📊 Batch Manual Entry"],
         index=0
     )
     
     st.markdown("---")
     
-    if mode == "🎯 Single Prop":
-        debug_mode = st.checkbox("🔧 Debug Mode", value=False)
+    if mode == "🎯 Single Prop Analysis":
+        debug_mode = st.checkbox("🔧 Enable Debug Mode", value=False)
     else:
         debug_mode = False
     
     st.markdown("---")
-    st.caption("PropPulse+ v2025.3")
-    st.caption("L20-Weighted Model")
+    st.caption("**PropPulse+ v2025.4**")
+    st.caption("L20-Weighted Projection Model")
+    st.caption("FantasyPros DvP Integration")
 
 # ==========================================
-# HEADER
+# MODE 1: SINGLE PROP ANALYSIS
 # ==========================================
-st.markdown("""
-<div class="main-header">
-    <div class="logo-text">PropPulse+</div>
-    <div class="tagline">AI-Powered NBA Player Prop Analytics</div>
-</div>
-""", unsafe_allow_html=True)
-
-# ==========================================
-# MODE 1: SINGLE PROP
-# ==========================================
-if mode == "🎯 Single Prop":
+if mode == "🎯 Single Prop Analysis":
     
     with st.form("prop_analyzer"):
+        st.markdown("### 📋 Prop Details")
+        
         player = st.text_input(
             "Player Name",
-            placeholder="e.g., LeBron James",
-            help="Enter the full player name"
+            placeholder="LeBron James",
+            help="Enter the full player name as it appears in official NBA stats"
         )
         
         col1, col2 = st.columns(2)
         with col1:
             stat = st.selectbox(
                 "Stat Category",
-                ["PTS", "REB", "AST", "REB+AST", "PRA", "FG3M"],
-                help="Select the prop type"
+                ["PTS", "REB", "AST", "REB+AST", "PRA", "P+R", "P+A", "FG3M"],
+                help="Select the prop bet type"
             )
         
         with col2:
@@ -193,22 +439,18 @@ if mode == "🎯 Single Prop":
                 max_value=100.0,
                 value=25.5,
                 step=0.5,
-                help="The sportsbook line"
+                help="The over/under line from your sportsbook"
             )
         
-        col3, col4 = st.columns([2, 1])
-        with col3:
-            odds = st.number_input(
-                "Odds (American)",
-                value=-110,
-                step=5,
-                help="Enter American odds (e.g., -110 or +150)"
-            )
+        odds = st.number_input(
+            "Odds (American Format)",
+            value=-110,
+            step=5,
+            help="Enter odds in American format (e.g., -110, +150)"
+        )
         
-        with col4:
-            st.write("")
-            st.write("")
-            submit = st.form_submit_button("🔍 Analyze Prop")
+        st.markdown("---")
+        submit = st.form_submit_button("🔍 ANALYZE PROP", use_container_width=True)
 
     if submit:
         if not player.strip():
@@ -254,11 +496,14 @@ if mode == "🎯 Single Prop":
                 opponent = result.get('opponent', 'N/A')
                 position = result.get('position', 'N/A')
                 dvp_mult = result.get('dvp_mult', 1.0)
+                confidence = result.get('confidence', 0.0)
+                grade = result.get('grade', 'N/A')
                 
                 # Calculate metrics
                 edge = (p_model - p_book) * 100
                 ev_cents = ev * 100
                 recommendation = "OVER" if projection > line else "UNDER"
+                projection_diff = projection - line
                 
                 # ==========================================
                 # RESULTS DISPLAY
@@ -266,26 +511,30 @@ if mode == "🎯 Single Prop":
                 
                 st.success("✅ Analysis Complete!")
                 
-                # Main metrics in columns
+                # Main metrics grid
+                st.markdown('<div class="metric-grid">', unsafe_allow_html=True)
+                
                 col1, col2, col3, col4 = st.columns(4)
                 
                 with col1:
+                    diff_class = "metric-positive" if projection_diff > 0 else "metric-negative"
                     st.markdown(f"""
-                    <div class="metric-box">
-                        <div class="metric-label">PROJECTION</div>
+                    <div class="metric-card">
+                        <div class="metric-label">Projection</div>
                         <div class="metric-value">{projection:.1f}</div>
-                        <div style="color: {'#11998e' if projection > line else '#eb3349'}; font-size: 13px;">
-                            {projection - line:+.1f} vs line
+                        <div class="metric-sublabel {diff_class}">
+                            {projection_diff:+.1f} vs line
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
                 
                 with col2:
+                    edge_class = "metric-positive" if edge > 0 else "metric-negative"
                     st.markdown(f"""
-                    <div class="metric-box">
-                        <div class="metric-label">MODEL PROB</div>
+                    <div class="metric-card">
+                        <div class="metric-label">Model Probability</div>
                         <div class="metric-value">{p_model * 100:.1f}%</div>
-                        <div style="color: {'#11998e' if edge > 0 else '#eb3349'}; font-size: 13px;">
+                        <div class="metric-sublabel {edge_class}">
                             {edge:+.1f}% edge
                         </div>
                     </div>
@@ -293,50 +542,57 @@ if mode == "🎯 Single Prop":
                 
                 with col3:
                     st.markdown(f"""
-                    <div class="metric-box">
-                        <div class="metric-label">BOOK PROB</div>
+                    <div class="metric-card">
+                        <div class="metric-label">Book Probability</div>
                         <div class="metric-value">{p_book * 100:.1f}%</div>
-                        <div style="color: #8B92B0; font-size: 13px;">
-                            Implied
+                        <div class="metric-sublabel metric-neutral">
+                            Implied odds
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
                 
                 with col4:
                     st.markdown(f"""
-                    <div class="metric-box">
-                        <div class="metric-label">GAMES</div>
+                    <div class="metric-card">
+                        <div class="metric-label">Sample Size</div>
                         <div class="metric-value">{n_games}</div>
-                        <div style="color: #8B92B0; font-size: 13px;">
-                            Analyzed
+                        <div class="metric-sublabel metric-neutral">
+                            Games analyzed
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
+                
+                st.markdown('</div>', unsafe_allow_html=True)
                 
                 # EV Display
                 ev_class = "ev-positive" if ev_cents > 0 else "ev-negative"
                 ev_emoji = "📈" if ev_cents > 0 else "📉"
                 st.markdown(f"""
-                <div style="text-align: center; margin: 24px 0;">
-                    <div class="{ev_class}">
+                <div class="ev-container">
+                    <div class="ev-badge {ev_class}">
                         {ev_emoji} EV: {ev_cents:+.1f}¢ per $1
                     </div>
-                    <div style="color: white; margin-top: 16px; font-size: 18px; font-weight: 600;">
-                        Recommendation: {recommendation}
+                    <div class="recommendation">
+                        Lean: {recommendation}
+                    </div>
+                    <div style="margin-top: 12px; color: #9CA3AF; font-size: 14px;">
+                        Grade: {grade} • Confidence: {confidence:.0%}
                     </div>
                 </div>
                 """, unsafe_allow_html=True)
                 
                 # Context Info
                 st.markdown(f"""
-                <div class="result-card">
-                    <strong>Context:</strong> {position} vs {opponent} • DvP: {dvp_mult:.3f}
+                <div class="info-card">
+                    <strong>Matchup Context:</strong> {position} vs {opponent} • 
+                    <strong>DvP Multiplier:</strong> {dvp_mult:.3f}x • 
+                    <strong>Games Analyzed:</strong> {n_games}
                 </div>
                 """, unsafe_allow_html=True)
                 
                 # Debug output
                 if debug_mode and model_output:
-                    with st.expander("🔧 Model Debug Log", expanded=True):
+                    with st.expander("🔧 Model Debug Log", expanded=False):
                         st.code(model_output, language="text")
             
             except Exception as e:
@@ -355,20 +611,22 @@ if mode == "🎯 Single Prop":
 # MODE 2: BATCH MANUAL ENTRY
 # ==========================================
 else:
-    st.markdown("### 🧠 Batch Manual Entry")
+    st.markdown("### 📊 Batch Manual Entry")
 
     st.info("""
-    Enter multiple props manually for quick batch analysis without a CSV file.
+    Enter multiple props manually for quick batch analysis.
     - Fill in player name, stat type, line, and odds
-    - Click **Analyze Batch** to process all at once
+    - Click **Analyze Batch** to process all entries
+    - Export results to Excel for further analysis
     """)
 
     # Choose how many props to enter
     n_props = st.number_input(
-        "How many props would you like to analyze?",
+        "Number of props to analyze",
         min_value=1,
         max_value=20,
-        value=3
+        value=3,
+        help="How many props would you like to enter?"
     )
 
     manual_entries = []
@@ -376,17 +634,31 @@ else:
         st.markdown(f"#### Prop #{i+1}")
         col1, col2, col3, col4 = st.columns(4)
         with col1:
-            player = st.text_input(f"Player {i+1}", key=f"player_{i}", placeholder="e.g., LeBron James")
+            player = st.text_input(
+                f"Player",
+                key=f"player_{i}",
+                placeholder="LeBron James"
+            )
         with col2:
             stat = st.selectbox(
-                f"Stat {i+1}",
-                ["PTS", "REB", "AST", "REB+AST", "PRA", "FG3M"],
+                f"Stat",
+                ["PTS", "REB", "AST", "REB+AST", "PRA", "P+R", "P+A", "FG3M"],
                 key=f"stat_{i}"
             )
         with col3:
-            line = st.number_input(f"Line {i+1}", min_value=0.0, max_value=100.0, value=20.0, key=f"line_{i}")
+            line = st.number_input(
+                f"Line",
+                min_value=0.0,
+                max_value=100.0,
+                value=20.0,
+                key=f"line_{i}"
+            )
         with col4:
-            odds = st.text_input(f"Odds {i+1}", value="-110", key=f"odds_{i}")
+            odds = st.text_input(
+                f"Odds",
+                value="-110",
+                key=f"odds_{i}"
+            )
         
         if player.strip():
             manual_entries.append({
@@ -396,16 +668,22 @@ else:
                 "odds": odds
             })
 
-    # Optional: Save these manual entries as a CSV for reuse
+    # Preview table
     if manual_entries:
         df_preview = pd.DataFrame(manual_entries)
         st.subheader("📋 Preview")
         st.dataframe(df_preview, use_container_width=True)
+        
         csv_data = df_preview.to_csv(index=False).encode('utf-8')
-        st.download_button("💾 Download These Entries as CSV", csv_data, "manual_entries.csv")
+        st.download_button(
+            "💾 Download Entries as CSV",
+            csv_data,
+            "manual_entries.csv",
+            use_container_width=True
+        )
 
-        # Analyze Button
-    if st.button("🚀 Analyze Batch", type="primary"):
+    # Analyze Button
+    if st.button("🚀 ANALYZE BATCH", type="primary", use_container_width=True):
         if not manual_entries:
             st.error("⚠️ Please enter at least one valid player name.")
             st.stop()
@@ -415,12 +693,13 @@ else:
         status_text = st.empty()
         results = []
 
-        # Loop through each manual entry
+        # Process each entry
         for i, entry in enumerate(manual_entries):
             status_text.text(f"Analyzing {i+1}/{len(manual_entries)}: {entry['player']}...")
             progress_bar.progress((i + 1) / len(manual_entries))
+            
             try:
-                # Convert inputs to proper numeric types
+                # Convert inputs
                 try:
                     line_val = float(entry["line"])
                 except ValueError:
@@ -431,7 +710,7 @@ else:
                 except ValueError:
                     odds_val = -110
 
-                # Run the model
+                # Run analysis
                 result = pe.analyze_single_prop(
                     entry["player"],
                     entry["stat"],
@@ -446,9 +725,7 @@ else:
             except Exception as e:
                 st.warning(f"⚠️ Skipped {entry['player']}: {str(e)}")
 
-        # ------------------------------------------
-        # AFTER loop completes, show results
-        # ------------------------------------------
+        # Clear progress indicators
         progress_bar.empty()
         status_text.empty()
 
@@ -458,19 +735,50 @@ else:
             results_df = pd.DataFrame(results)
 
             # Summary Metrics
+            st.markdown('<div class="metric-grid">', unsafe_allow_html=True)
             col1, col2, col3 = st.columns(3)
+            
             with col1:
                 pos_ev = len([r for r in results if r['ev'] > 0])
-                st.metric("Positive EV Props", pos_ev)
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-label">Positive EV Props</div>
+                    <div class="metric-value">{pos_ev}</div>
+                    <div class="metric-sublabel metric-neutral">
+                        Out of {len(results)} total
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
             with col2:
                 avg_ev = sum(r['ev'] for r in results) / len(results)
-                st.metric("Average EV", f"{avg_ev * 100:.1f}¢")
+                avg_class = "metric-positive" if avg_ev > 0 else "metric-negative"
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-label">Average EV</div>
+                    <div class="metric-value {avg_class}">{avg_ev * 100:.1f}¢</div>
+                    <div class="metric-sublabel metric-neutral">
+                        Per dollar wagered
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
             with col3:
                 top_ev = max(results, key=lambda x: x['ev'])
-                st.metric("Top EV", f"{top_ev['ev'] * 100:.1f}¢")
+                st.markdown(f"""
+                <div class="metric-card">
+                    <div class="metric-label">Top EV Prop</div>
+                    <div class="metric-value metric-positive">{top_ev['ev'] * 100:.1f}¢</div>
+                    <div class="metric-sublabel metric-neutral">
+                        {top_ev['player']} {top_ev['stat']}
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
 
             # Results Table
-            st.subheader("📊 All Results")
+            st.subheader("📊 Detailed Results")
             display_df = results_df[[
                 'player', 'stat', 'line', 'odds', 'projection', 'p_model', 'ev', 'n_games'
             ]].copy()
@@ -496,24 +804,25 @@ else:
                 height=400
             )
 
-            # Export button
-            if st.button("💾 Generate Excel Dashboard"):
-                with st.spinner("Generating Excel..."):
-                    pe.export_results_to_excel(results_df)
-                    st.success("✅ Excel file generated in /output folder!")
+            # Export functionality
+            if st.button("💾 GENERATE EXCEL DASHBOARD", use_container_width=True):
+                with st.spinner("Generating Excel dashboard..."):
+                    try:
+                        pe.export_results_to_excel(results_df)
+                        st.success("✅ Excel dashboard generated in /output folder!")
+                    except Exception as e:
+                        st.error(f"❌ Export failed: {e}")
 
         else:
-            st.error("❌ No valid results generated. Double-check your inputs.")
-
-
+            st.error("❌ No valid results generated. Please check your inputs and try again.")
 
 # ==========================================
 # FOOTER
 # ==========================================
-st.markdown("---")
 st.markdown("""
-<div style="text-align: center; color: #8B92B0; padding: 2rem 0; font-size: 13px;">
-    PropPulse+ v2025.3 | L20-Weighted Model with FantasyPros DvP<br>
-    Built with ❤️ for sharper betting decisions
+<div class="footer">
+    <strong>PropPulse+ v2025.4</strong> | L20-Weighted Projection Model<br>
+    Integrated with FantasyPros DvP • Built for Professional Bettors<br>
+    <em>For entertainment purposes only. Bet responsibly.</em>
 </div>
 """, unsafe_allow_html=True)

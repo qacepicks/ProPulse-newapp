@@ -1454,7 +1454,7 @@ def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
     ev_raw = ev_sportsbook(p_model, odds)
     ev = ev_raw * (0.5 + 0.5 * confidence)
 
-    # --- EV grading ---
+       # --- EV grading ---
     ev_cents = ev * 100
     ev_score = ev_cents * confidence
     if ev_score >= 8:
@@ -1469,10 +1469,10 @@ def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
     print(f"[EV] {player}: EV¢={ev_cents:+.2f} | Conf={confidence:.2f} | Score={ev_score:.2f} → {grade}")
 
     if debug_mode:
-    try:
-        debug_projection(df, stat=stat, line=line, player_name=player)
-    except Exception as e:
-        print(f"[Debug] ⚠️ Skipped debug projection: {e}")
+        try:
+            debug_projection(df, stat=stat, line=line, player_name=player)
+        except Exception as e:
+            print(f"[Debug] ⚠️ Skipped debug projection: {e}")
 
     # ================================================
     # 🎯 APPLY GRADING LOGIC (using tuned config)
@@ -1484,6 +1484,8 @@ def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
     except Exception as e:
         print(f"[Grading] ⚠️ Failed to apply grading logic: {e}")
         grade = "NEUTRAL"
+
+
 
     # --- Final output ---
     direction = "Higher" if proj_stat > line else "Lower"

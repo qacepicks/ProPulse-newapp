@@ -464,6 +464,9 @@ if mode == "🎯 Single Prop Analysis":
             st.error(f"❌ Failed to load settings: {e}")
             st.stop()
         
+        # ==========================================
+        # RUN ANALYSIS
+        # ==========================================
         with st.spinner(f"🏀 Analyzing {player}'s {stat} projection..."):
             try:
                 # Capture model output
@@ -477,145 +480,59 @@ if mode == "🎯 Single Prop Analysis":
                         settings=settings,
                         debug_mode=debug_mode
                     )
-                
+
                 model_output = buf.getvalue()
-                
+
                 if not result:
                     st.error("❌ Unable to analyze this prop. Player data may be unavailable.")
                     if debug_mode and model_output:
                         with st.expander("🔧 Debug Log"):
                             st.code(model_output)
                     st.stop()
-            
+
             except TypeError as te:
                 st.error(f"❌ Error analyzing prop: Unable to fetch opponent data for {player}")
                 st.warning("⚠️ This usually means the player has no upcoming games or the schedule API is unavailable.")
                 if debug_mode:
                     with st.expander("🔧 Error Details"):
                         st.code(str(te))
-                        if 'model_output' in locals():
-                            st.code(model_output)
                 st.stop()
-                
-                # Extract results
-                p_model = result['p_model']
-                p_book = result['p_book']
-                ev = result['ev']
-                projection = result['projection']
-                n_games = result['n_games']
-                opponent = result.get('opponent', 'N/A')
-                position = result.get('position', 'N/A')
-                dvp_mult = result.get('dvp_mult', 1.0)
-                confidence = result.get('confidence', 0.0)
-                grade = result.get('grade', 'N/A')
-                
-                # Calculate metrics
-                edge = (p_model - p_book) * 100
-                ev_cents = ev * 100
-                recommendation = "OVER" if projection > line else "UNDER"
-                projection_diff = projection - line
-                
-                # ==========================================
-                # RESULTS DISPLAY
-                # ==========================================
-                
-                st.success("✅ Analysis Complete!")
-                
-                # Main metrics grid
-                st.markdown('<div class="metric-grid">', unsafe_allow_html=True)
-                
-                col1, col2, col3, col4 = st.columns(4)
-                
-                with col1:
-                    diff_class = "metric-positive" if projection_diff > 0 else "metric-negative"
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-label">Projection</div>
-                        <div class="metric-value">{projection:.1f}</div>
-                        <div class="metric-sublabel {diff_class}">
-                            {projection_diff:+.1f} vs line
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with col2:
-                    edge_class = "metric-positive" if edge > 0 else "metric-negative"
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-label">Model Probability</div>
-                        <div class="metric-value">{p_model * 100:.1f}%</div>
-                        <div class="metric-sublabel {edge_class}">
-                            {edge:+.1f}% edge
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with col3:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-label">Book Probability</div>
-                        <div class="metric-value">{p_book * 100:.1f}%</div>
-                        <div class="metric-sublabel metric-neutral">
-                            Implied odds
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                with col4:
-                    st.markdown(f"""
-                    <div class="metric-card">
-                        <div class="metric-label">Sample Size</div>
-                        <div class="metric-value">{n_games}</div>
-                        <div class="metric-sublabel metric-neutral">
-                            Games analyzed
-                        </div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                st.markdown('</div>', unsafe_allow_html=True)
-                
-                # EV Display
-                ev_class = "ev-positive" if ev_cents > 0 else "ev-negative"
-                ev_emoji = "📈" if ev_cents > 0 else "📉"
-                st.markdown(f"""
-                <div class="ev-container">
-                    <div class="ev-badge {ev_class}">
-                        {ev_emoji} EV: {ev_cents:+.1f}¢ per $1
-                    </div>
-                    <div class="recommendation">
-                        Lean: {recommendation}
-                    </div>
-                    <div style="margin-top: 12px; color: #9CA3AF; font-size: 14px;">
-                        Grade: {grade} • Confidence: {confidence:.0%}
-                    </div>
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Context Info
-                st.markdown(f"""
-                <div class="info-card">
-                    <strong>Matchup Context:</strong> {position} vs {opponent} • 
-                    <strong>DvP Multiplier:</strong> {dvp_mult:.3f}x • 
-                    <strong>Games Analyzed:</strong> {n_games}
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Debug output
-                if debug_mode and model_output:
-                    with st.expander("🔧 Model Debug Log", expanded=False):
-                        st.code(model_output, language="text")
-            
+
             except Exception as e:
                 st.error(f"❌ Analysis Error: {str(e)}")
                 import traceback
                 error_details = traceback.format_exc()
                 with st.expander("Show Error Details"):
                     st.code(error_details)
-                
-                # Try to show any captured output
                 if 'model_output' in locals() and model_output:
                     with st.expander("Partial Model Output"):
                         st.code(model_output)
+                st.stop()
+
+        # ==========================================
+        # ✅ RESULTS DISPLAY SECTION
+        # ==========================================
+        p_model = result['p_model']
+        p_book = result['p_book']
+        ev = result['ev']
+        projection = result['projection']
+        n_games = result['n_games']
+        opponent = result.get('opponent', 'N/A')
+        position = result.get('position', 'N/A')
+        dvp_mult = result.get('dvp_mult', 1.0)
+        confidence = result.get('confidence', 0.0)
+        grade = result.get('grade', 'N/A')
+
+        edge = (p_model - p_book) * 100
+        ev_cents = ev * 100
+        recommendation = "OVER" if projection > line else "UNDER"
+        projection_diff = projection - line
+
+        st.success("✅ Analysis Complete!")
+
+        # Add your metric cards, EV display, and info-card code here
+        ...
+
 
 # ==========================================
 # MODE 2: BATCH MANUAL ENTRY

@@ -1474,56 +1474,56 @@ def analyze_single_prop(player, stat, line, odds, settings, debug_mode=False):
     except Exception as e:
         print(f"[Debug] ⚠️ Skipped debug projection: {e}")
 
-# ================================================
-# 🎯 APPLY GRADING LOGIC (using tuned config)
-# ================================================
-try:
-    ev_pct = (p_model - p_book) * 100
-    gap_abs = abs(proj_stat - line)
-    grade = grade_prop(ev_pct, confidence, gap_abs, dvp_mult)
-except Exception as e:
-    print(f"[Grading] ⚠️ Failed to apply grading logic: {e}")
-    grade = "NEUTRAL"
+    # ================================================
+    # 🎯 APPLY GRADING LOGIC (using tuned config)
+    # ================================================
+    try:
+        ev_pct = (p_model - p_book) * 100
+        gap_abs = abs(proj_stat - line)
+        grade = grade_prop(ev_pct, confidence, gap_abs, dvp_mult)
+    except Exception as e:
+        print(f"[Grading] ⚠️ Failed to apply grading logic: {e}")
+        grade = "NEUTRAL"
 
-# --- Final output ---
-direction = "Higher" if proj_stat > line else "Lower"
-result_symbol = "⚠️" if abs(proj_stat - line) < 0.5 else "✓" if direction == "Higher" else "✗"
+    # --- Final output ---
+    direction = "Higher" if proj_stat > line else "Lower"
+    result_symbol = "⚠️" if abs(proj_stat - line) < 0.5 else "✓" if direction == "Higher" else "✗"
 
-# Clean fallback values
-try:
-    projection_val = float(proj_stat)
-except Exception:
-    projection_val = 0.0
+    # Clean fallback values
+    try:
+        projection_val = float(proj_stat)
+    except Exception:
+        projection_val = 0.0
 
-try:
-    ev_val = float(ev)
-except Exception:
-    ev_val = 0.0
+    try:
+        ev_val = float(ev)
+    except Exception:
+        ev_val = 0.0
 
-return {
-    "player": player,
-    "stat": stat,
-    "line": float(line),
-    "odds": int(odds),
-    "projection": round(projection_val, 2),
-    "p_model": float(p_model),
-    "p_book": float(p_book),
-    "ev": ev_val,
-    "n_games": int(n_games),
-    "confidence": float(confidence),
-    "grade": str(grade),
-    "opponent": opp or "N/A",
-    "position": pos or "N/A",
-    "dvp_mult": round(float(dvp_mult), 3),
-    "injury": inj or "N/A",
-    "direction": direction,
-    "result": result_symbol
-}
+    return {
+        "player": player,
+        "stat": stat,
+        "line": float(line),
+        "odds": int(odds),
+        "projection": round(projection_val, 2),
+        "p_model": float(p_model),
+        "p_book": float(p_book),
+        "ev": ev_val,
+        "n_games": int(n_games),
+        "confidence": float(confidence),
+        "grade": str(grade),
+        "opponent": opp or "N/A",
+        "position": pos or "N/A",
+        "dvp_mult": round(float(dvp_mult), 3),
+        "injury": inj or "N/A",
+        "direction": direction,
+        "result": result_symbol
+    }
+
+
 # ================================================
 # 🎯 GRADING LOGIC (using tuned config)
 # ================================================
-def grade_prop(ev_pct, conf, gap_abs, dvp):
-
 def grade_prop(ev_pct, conf, gap_abs, dvp):
     """
     Apply tuned rules from calibration to classify each prop.
@@ -1565,6 +1565,7 @@ def grade_prop(ev_pct, conf, gap_abs, dvp):
 
     return "NEUTRAL"
 
+
 def batch_analyze_props(props_list, settings):
     """
     Runs analyze_single_prop() for a list of player props.
@@ -1586,6 +1587,7 @@ def batch_analyze_props(props_list, settings):
         except Exception as e:
             print(f"[Batch] ⚠️ Error analyzing {player}: {e}")
     return results
+
 # ===============================
 # 🏆 Display Summary Helper
 # ===============================

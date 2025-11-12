@@ -7,7 +7,7 @@ import streamlit as st
 import pandas as pd
 import os
 import base64
-from datetime import datetime
+from datetime import datetime, timedelta
 import io
 from contextlib import redirect_stdout
 import plotly.graph_objects as go
@@ -445,9 +445,6 @@ with st.sidebar:
     st.markdown("---")
     
     # Date Picker
-    from datetime import datetime, timedelta
-    
-    # Default to "yesterday" if it's past midnight and no games today
     default_date = datetime.now()
     
     analysis_date = st.date_input(
@@ -777,10 +774,19 @@ elif mode == "📊 Batch Manual Entry":
             manual_entries.append({"player": player, "stat": stat, "line": line, "odds": odds})
 
     if manual_entries:
-    df_preview = pd.DataFrame(manual_entries)
-    st.subheader("📋 Preview")
-    st.dataframe(df_preview, use_container_width=True)
+        df_preview = pd.DataFrame(manual_entries)
+        st.subheader("📋 Preview")
+        st.dataframe(df_preview, use_container_width=True)
+        
+        csv_data = df_preview.to_csv(index=False).encode('utf-8')
+        st.download_button(
+            "💾 Download Entries as CSV",
+            csv_data,
+            "manual_entries.csv",
+            use_container_width=True
+        )
 
+    # Analyze Button
     if st.button("🚀 ANALYZE BATCH", type="primary", use_container_width=True):
         if not manual_entries:
             st.error("⚠️ Please enter at least one valid player name.")
@@ -994,7 +1000,7 @@ else:
                     
                     results_df = pd.DataFrame(results)
                     
-                    # Summary metrics (same as batch mode)
+                    # Summary metrics
                     st.markdown('<div class="metric-grid">', unsafe_allow_html=True)
                     col1, col2, col3 = st.columns(3)
                     

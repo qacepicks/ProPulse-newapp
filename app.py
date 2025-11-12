@@ -104,15 +104,57 @@ st.markdown(f"""
   color:var(--success);padding:6px 12px;border-radius:8px;font-size:12px;font-weight:700;}}
 
 /* Inputs + Buttons */
-.stTextInput input,.stNumberInput input,.stSelectbox select{{
+.stTextInput input,.stNumberInput input,.stSelectbox select{
   background:var(--surface-dark);border:2px solid var(--border-color);
   border-radius:10px;color:var(--text-primary);padding:12px 14px;font-size:15px;
-}}
-.stButton>button{{
+}
+
+/* Dark theme fix for Streamlit date input */
+[data-testid="stDateInput"] input {
+  background-color: var(--surface-dark) !important;
+  border: 2px solid var(--border-color) !important;
+  color: var(--text-primary) !important;
+  border-radius: 10px !important;
+  padding: 10px 12px !important;
+  font-size: 15px !important;
+}
+
+[data-testid="stDateInput"] label {
+  font-weight: 700 !important;
+  font-size: 12px !important;
+  text-transform: uppercase !important;
+  letter-spacing: 1px !important;
+  margin-bottom: 6px !important;
+  color: var(--text-secondary) !important;
+}
+
+/* Focus & hover glow for date input */
+[data-testid="stDateInput"] input:hover,
+[data-testid="stDateInput"] input:focus {
+  border-color: var(--primary-color) !important;
+  box-shadow: 0 0 8px rgba(255, 140, 66, 0.4) !important;
+  outline: none !important;
+  transition: 0.25s ease-in-out !important;
+}
+
+/* Calendar popup dark theme */
+.stDateInput [role="dialog"], .stDateInput [data-baseweb="calendar"] {
+  background-color: var(--surface-dark) !important;
+  color: var(--text-primary) !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 10px !important;
+}
+.stDateInput [role="dialog"] * {
+  color: var(--text-primary) !important;
+}
+
+/* Buttons */
+.stButton>button{
   width:100%;background:linear-gradient(135deg,var(--primary-color),var(--primary-dark));
   border-radius:10px;padding:14px 24px;font-weight:800;text-transform:uppercase;
   box-shadow:0 6px 20px rgba(255,140,66,0.4);
-}}
+}
+
 .stButton>button:hover{{transform:translateY(-2px);
   box-shadow:0 8px 28px rgba(255,140,66,0.6);}}
 
@@ -200,15 +242,31 @@ with st.sidebar:
 if mode == "🎯 Single Prop Analysis":
     with st.form("prop_analyzer"):
         st.markdown("### 📋 Enter Prop Details")
+
         col1, col2 = st.columns([2, 1])
         player = col1.text_input("Player Name", placeholder="LeBron James")
-        stat = col2.selectbox("Stat Category",
-            ["PTS", "REB", "AST", "REB+AST", "PRA", "P+R", "P+A", "FG3M"])
+        stat = col2.selectbox(
+            "Stat Category",
+            ["PTS", "REB", "AST", "REB+AST", "PRA", "P+R", "P+A", "FG3M"]
+        )
+
+        # NEW: Date picker moved inside form
+        col_date = st.columns([1])[0]
+        analysis_date = col_date.date_input(
+            "📅 Analysis Date",
+            value=datetime.now(),
+            min_value=datetime.now() - timedelta(days=7),
+            max_value=datetime.now() + timedelta(days=7),
+            help="Select the date for opponent/schedule lookup."
+        )
+
         col3, col4 = st.columns(2)
         line = col3.number_input("Line", 0.0, 100.0, 25.5, 0.5)
         odds = col4.number_input("Odds (American)", value=-110, step=5)
+
         st.markdown("---")
         submit = st.form_submit_button("🔍 ANALYZE PROP", use_container_width=True)
+
 
     if submit:
         if not player.strip():

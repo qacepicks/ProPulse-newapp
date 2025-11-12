@@ -38,40 +38,61 @@ def get_live_opponent_from_schedule(player, settings=None):
     """
     Returns (opponent_abbr, team_abbr) for today's game using NBA live scoreboard.
     Falls back to (None, team_abbr) if player's team has no game today.
+    Includes timeout handling to avoid freezing if the NBA API hangs.
     """
+    import signal
+
+    def handler(signum, frame):
+        raise TimeoutError("Opponent lookup timeout")
+
     try:
+        signal.signal(signal.SIGALRM, handler)
+        signal.alarm(6)  # ⏱ 6-second max timeout
+
         from datetime import date
         from nba_api.stats.static import players as _players
         from nba_api.stats.endpoints import commonplayerinfo
 
-        # who is the player, what team?
+        # --- Find player’s team ---
         pinfo = next((p for p in _players.get_players() if p["full_name"].lower() == player.lower()), None)
         if not pinfo:
             print(f"[Schedule] ⚠️ Player not found in NBA API: {player}")
+            signal.alarm(0)
             return None, None
 
-        team_abbr = commonplayerinfo.CommonPlayerInfo(player_id=pinfo["id"]).get_data_frames()[0].loc[0, "TEAM_ABBREVIATION"]
+        team_abbr = (
+            commonplayerinfo.CommonPlayerInfo(player_id=pinfo["id"])
+            .get_data_frames()[0]
+            .loc[0, "TEAM_ABBREVIATION"]
+        )
 
-        # today’s games
+        # --- Load today's games ---
         today = date.today().strftime("%Y-%m-%d")
         url = "https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json"
-        data = requests.get(url, timeout=10).json()
+        data = requests.get(url, timeout=6).json()
 
         for g in data.get("scoreboard", {}).get("games", []):
             home = g["homeTeam"]["teamTricode"]
             away = g["awayTeam"]["teamTricode"]
             if team_abbr == home:
+                signal.alarm(0)
                 return away, home
             if team_abbr == away:
+                signal.alarm(0)
                 return home, away
 
+        signal.alarm(0)
         print(f"[Schedule] ℹ️ No game today for {player} ({team_abbr})")
         return None, team_abbr
 
-    except Exception as e:
-        print(f"[Schedule] ❌ Opponent lookup failed: {e}")
+    except TimeoutError:
+        print(f"[Schedule] ⚠️ Timeout while finding opponent for {player}")
         return None, None
 
+    except Exception as e:
+        signal.alarm(0)
+        print(f"[Schedule] ❌ Opponent lookup failed: {e}")
+        return None, None
 
 # ================================================
 # ⚙️ LOAD TUNED CONFIG (auto from JSON)

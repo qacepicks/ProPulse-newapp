@@ -446,13 +446,21 @@ with st.sidebar:
     
     # Date Picker
     from datetime import datetime, timedelta
+    
+    # Default to "yesterday" if it's past midnight and no games today
+    default_date = datetime.now()
+    
     analysis_date = st.date_input(
         "Analysis Date",
-        value=datetime.now(),
+        value=default_date,
         min_value=datetime.now() - timedelta(days=7),
         max_value=datetime.now() + timedelta(days=7),
-        help="Select the date for opponent/schedule lookup"
+        help="Select the date for opponent/schedule lookup. Use this if the current date shows no games."
     )
+    
+    # Show warning if selected date might have no games
+    if analysis_date.strftime("%Y-%m-%d") != datetime.now().strftime("%Y-%m-%d"):
+        st.caption(f"⚠️ Using custom date: {analysis_date.strftime('%b %d, %Y')}")
     
     st.markdown("---")
     
@@ -540,12 +548,14 @@ if mode == "🎯 Single Prop Analysis":
         # ==========================================
         
         # Display current date being analyzed
-        from datetime import datetime
-        analysis_date = datetime.now().strftime("%Y-%m-%d")
-        st.info(f"📅 Analyzing for date: **{analysis_date}**")
+        analysis_date_str = analysis_date.strftime("%Y-%m-%d")
+        st.info(f"📅 Analyzing for date: **{analysis_date_str}** (Opponent matchup based on this date)")
         
         with st.spinner(f"🏀 Analyzing {player}'s {stat} projection..."):
             try:
+                # Pass analysis date to settings
+                settings['analysis_date'] = analysis_date_str
+                
                 buf = io.StringIO()
                 with redirect_stdout(buf):
                     result = pe.analyze_single_prop(
@@ -771,12 +781,14 @@ elif mode == "📊 Batch Manual Entry":
         st.subheader("📋 Preview")
         st.dataframe(df_preview, use_container_width=True)
 
-    if st.button("🚀 ANALYZE BATCH", type="primary", use_container_width=True):
+                if st.button("🚀 ANALYZE BATCH", type="primary", use_container_width=True):
         if not manual_entries:
             st.error("⚠️ Please enter at least one valid player name.")
             st.stop()
 
         settings = pe.load_settings()
+        settings['analysis_date'] = analysis_date.strftime("%Y-%m-%d")
+        
         progress_bar = st.progress(0)
         status_text = st.empty()
         results = []
@@ -951,6 +963,8 @@ else:
             
             if st.button("🚀 ANALYZE CSV DATA", type="primary", use_container_width=True):
                 settings = pe.load_settings()
+                settings['analysis_date'] = analysis_date.strftime("%Y-%m-%d")
+                
                 progress_bar = st.progress(0)
                 status_text = st.empty()
                 results = []

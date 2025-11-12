@@ -781,7 +781,7 @@ elif mode == "📊 Batch Manual Entry":
         st.subheader("📋 Preview")
         st.dataframe(df_preview, use_container_width=True)
 
-                if st.button("🚀 ANALYZE BATCH", type="primary", use_container_width=True):
+        if st.button("🚀 ANALYZE BATCH", type="primary", use_container_width=True):
         if not manual_entries:
             st.error("⚠️ Please enter at least one valid player name.")
             st.stop()

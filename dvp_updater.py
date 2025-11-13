@@ -1,267 +1,261 @@
-# ===============================
-# 📊 DvP Auto Updater (Hashtag Basketball) - FIXED
-# ===============================
-import os, time, json, requests
+#!/usr/bin/env python3
+# dvp_updater.py — PropPulse+ v2025 (HashtagBasketball Edition - HTML Scraper)
+#
+# Scrapes DvP from:
+# https://hashtagbasketball.com/nba-defense-vs-position
+#
+# Output format:
+#   dvp[TEAM_ABBR][POS][STAT] = rank
+#
+# Supported stats:
+#   PTS, REB, AST, FG3M
+
+import os
+import json
+import time
+import requests
 import pandas as pd
+from bs4 import BeautifulSoup
 from io import StringIO
-from datetime import datetime
 
-DATA_PATH = "data/"
-DVP_FILE = os.path.join(DATA_PATH, "dvp_data.json")
-REFRESH_HOURS = 12
-URL = "https://hashtagbasketball.com/nba-defense-vs-position"
+CACHE_FILE = "data/dvp_cache.json"
+CACHE_HOURS = 12
 
-POSITIONS = ["PG", "SG", "SF", "PF", "C"]
-STATS = ["PTS", "REB", "AST", "FG3M", "3PM"]  # Added 3PM as alias
+HASHTAG_URL = "https://hashtagbasketball.com/nba-defense-vs-position"
 
-# -------------------------------
-# TEAM NAME → ABBR
-# -------------------------------
-def simplify_team_abbr(team_name):
-    lookup = {
-        "Atlanta": "ATL", "Boston": "BOS", "Brooklyn": "BKN", "Charlotte": "CHA",
-        "Chicago": "CHI", "Cleveland": "CLE", "Dallas": "DAL", "Denver": "DEN",
-        "Detroit": "DET", "Golden State": "GSW", "Houston": "HOU", "Indiana": "IND",
-        "LA Clippers": "LAC", "LA Lakers": "LAL", "Lakers": "LAL", "Clippers": "LAC",
-        "Memphis": "MEM", "Miami": "MIA", "Milwaukee": "MIL", "Minnesota": "MIN", 
-        "New Orleans": "NOP", "New York": "NYK", "Oklahoma City": "OKC", "Orlando": "ORL",
-        "Philadelphia": "PHI", "Phoenix": "PHX", "Portland": "POR", "Sacramento": "SAC",
-        "San Antonio": "SAS", "Toronto": "TOR", "Utah": "UTA", "Washington": "WAS"
+
+# ------------------------------------------------------
+# Team Mapping (abbreviations used on HashtagBasketball)
+# ------------------------------------------------------
+TEAM_MAP = {
+    "ATL": "ATL", "BOS": "BOS", "BKN": "BKN", "CHA": "CHA", "CHI": "CHI",
+    "CLE": "CLE", "DAL": "DAL", "DEN": "DEN", "DET": "DET", "GSW": "GS",
+    "GS": "GSW", "HOU": "HOU", "IND": "IND", "LAC": "LAC", "LAL": "LAL",
+    "MEM": "MEM", "MIA": "MIA", "MIL": "MIL", "MIN": "MIN", "NOP": "NO",
+    "NO": "NOP", "NYK": "NY", "NY": "NYK", "OKC": "OKC", "ORL": "ORL",
+    "PHI": "PHI", "PHX": "PHX", "POR": "POR", "SAC": "SAC", "SAS": "SA",
+    "SA": "SAS", "TOR": "TOR", "UTA": "UTA", "WAS": "WAS"
+}
+
+
+# ------------------------------------------------------
+# Scrape HashtagBasketball HTML
+# ------------------------------------------------------
+def _fetch_dvp_from_hashtag():
+    """
+    Scrapes the HashtagBasketball DvP page.
+    The full table (Table 4) has 150 rows: 30 teams × 5 positions
+    Each row shows: Position, Team, PTS rank, FG%, FT%, 3PM rank, REB rank, AST rank, STL, BLK, TO
+    """
+    print("[DVP] 🔄 Fetching DvP from HashtagBasketball HTML...")
+
+    # Initialize nested dict structure
+    all_teams = set(TEAM_MAP.values())
+    dvp = {abbr: {pos: {} for pos in ["PG", "SG", "SF", "PF", "C"]}
+           for abbr in all_teams}
+
+    # Map of our stat names to column names in the table
+    stat_columns = {
+        "PTS": "Sort: PTS",
+        "REB": "Sort: REB", 
+        "AST": "Sort: AST",
+        "FG3M": "Sort: 3PM"
     }
-    for k, v in lookup.items():
-        if k.lower() in team_name.lower():
-            return v
-    return team_name[:3].upper()
 
-# -------------------------------
-# SCRAPER - FIXED
-# -------------------------------
-def fetch_hashtag_table():
-    """Pull the master Defense vs Position table from Hashtag Basketball."""
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+
     try:
-        headers = {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                          "AppleWebKit/537.36 (KHTML, like Gecko) "
-                          "Chrome/125.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9"
-        }
+        # Fetch the page (we can get all stats from one page)
+        print(f"[DVP]   Fetching from {HASHTAG_URL}")
+        response = requests.get(HASHTAG_URL, headers=headers, timeout=15)
+        response.raise_for_status()
         
-        print(f"[DvP] Fetching {URL}...")
-        r = requests.get(URL, headers=headers, timeout=15)
+        soup = BeautifulSoup(response.content, 'html.parser')
         
-        if r.status_code != 200:
-            print(f"[DvP] ❌ HTTP {r.status_code}")
-            return None
+        # Find all tables
+        tables = soup.find_all('table')
+        print(f"[DVP]   Found {len(tables)} tables")
         
-        # Parse all tables
-        tables = pd.read_html(StringIO(r.text))
-        print(f"[DvP] Found {len(tables)} tables on page")
+        # We want the largest table (should be 150 rows for all team-position combos)
+        target_table = None
+        max_rows = 0
         
-        if not tables:
-            print(f"[DvP] ❌ No tables found")
-            return None
+        for table in tables:
+            try:
+                df = pd.read_html(StringIO(str(table)))[0]
+                if len(df) > max_rows:
+                    max_rows = len(df)
+                    target_table = df
+            except:
+                continue
         
-        # ✅ FIX: The DvP data is in the LARGEST table (table 3, ~150 rows)
-        # Find the table with the most rows (should be ~150 = 30 teams × 5 positions)
-        df = max(tables, key=lambda t: len(t))
+        if target_table is None:
+            print("[DVP] ❌ Could not find data table")
+            return dvp
         
-        print(f"[DvP] Selected table with {len(df)} rows × {len(df.columns)} columns")
+        df = target_table
+        print(f"[DVP]   Processing table with {len(df)} rows")
         
-        if len(df) < 30:
-            print(f"[DvP] ⚠️ Table seems too small ({len(df)} rows), expected ~150")
-            return None
+        # Clean column names
+        df.columns = df.columns.astype(str)
         
-        return df
+        # The table has columns: Position, Team, PTS, FG%, FT%, 3PM, REB, AST, STL, BLK, TO
+        pos_col = "Sort: Position"
+        team_col = "Sort: Team"
+        
+        if pos_col not in df.columns or team_col not in df.columns:
+            print(f"[DVP] ❌ Missing required columns. Found: {list(df.columns)}")
+            return dvp
+        
+        # Process each row
+        for idx, row in df.iterrows():
+            try:
+                position = str(row[pos_col]).strip().upper()
+                team_raw = str(row[team_col]).strip().upper()
+                
+                # Extract team abbreviation (might have numbers after it)
+                # e.g., "NY 3" -> "NY"
+                team_abbr = ''.join(c for c in team_raw.split()[0] if c.isalpha())
+                
+                # Map to standard abbreviation
+                team_abbr = TEAM_MAP.get(team_abbr, team_abbr)
+                
+                # Validate position
+                if position not in ["PG", "SG", "SF", "PF", "C"]:
+                    continue
+                
+                if team_abbr not in dvp:
+                    continue
+                
+                # Extract rank values for each stat
+                for stat_key, col_name in stat_columns.items():
+                    if col_name in df.columns:
+                        try:
+                            # The value might be like "15.6 1" where the number after space is the rank
+                            # Or it might just be a rank number
+                            value_str = str(row[col_name]).strip()
+                            
+                            # Try to extract rank (typically the last number, or first if it's just rank)
+                            parts = value_str.split()
+                            
+                            # If there are multiple numbers, the last one is usually the rank
+                            # If just one number, it could be either value or rank
+                            if len(parts) >= 2:
+                                # Format like "15.6 1" - last number is rank
+                                rank = float(parts[-1])
+                            else:
+                                # Single number - try to parse it
+                                rank = float(parts[0])
+                            
+                            dvp[team_abbr][position][stat_key] = rank
+                            
+                        except (ValueError, IndexError):
+                            pass
+            
+            except Exception as e:
+                continue
+        
+        # Count successful extractions
+        total_entries = sum(
+            len(dvp[team][pos]) 
+            for team in dvp 
+            for pos in dvp[team]
+        )
+        
+        if total_entries > 0:
+            print(f"[DVP] ✅ Successfully loaded {total_entries} DvP rank entries")
+        else:
+            print("[DVP] ⚠️ No data was extracted from table")
         
     except Exception as e:
-        print(f"[DvP] ❌ Error fetching Hashtag Basketball table: {e}")
-        import traceback
-        traceback.print_exc()
-        return None
-
-# -------------------------------
-# PARSER - IMPROVED
-# -------------------------------
-def process_hashtag_table(df):
-    """Convert the big Hashtag Basketball table into our nested dict."""
-    dvp = {}
-    
-    # Clean column names - remove "Sort: " prefix
-    df.columns = [str(c).replace("Sort: ", "").strip() for c in df.columns]
-    
-    print(f"[DvP] Processing columns: {list(df.columns)[:10]}")
-    
-    for _, row in df.iterrows():
-        # Get team name
-        team_name = None
-        for col in ["Team", "TEAM", "team"]:
-            if col in df.columns:
-                team_name = str(row.get(col, "")).strip()
-                break
-        
-        if not team_name or team_name == "":
-            continue
-        
-        abbr = simplify_team_abbr(team_name)
-        
-        # Get position
-        position = None
-        for col in ["Position", "POSITION", "position", "Pos", "POS"]:
-            if col in df.columns:
-                position = str(row.get(col, "")).strip().upper()
-                break
-        
-        if not position or position not in POSITIONS:
-            continue
-        
-        # Initialize team if needed
-        if abbr not in dvp:
-            dvp[abbr] = {}
-        
-        # Initialize position if needed
-        if position not in dvp[abbr]:
-            dvp[abbr][position] = {}
-        
-        # Extract stats - be more flexible with column matching
-        for stat in ["PTS", "REB", "AST", "FG3M", "3PM"]:
-            # Try exact match first, then partial match
-            stat_col = None
-            
-            # Exact match
-            if stat in df.columns:
-                stat_col = stat
-            # Partial match (case insensitive)
-            else:
-                for col in df.columns:
-                    col_upper = str(col).upper()
-                    if stat == "FG3M" and "3PM" in col_upper:
-                        stat_col = col
-                        break
-                    elif stat in col_upper:
-                        stat_col = col
-                        break
-            
-            if stat_col:
-                val = row.get(stat_col)
-                
-                # ✅ FIX: Values might be strings like "21.8 54" (stat + rank)
-                # Extract just the first number
-                if isinstance(val, str):
-                    val = val.strip().split()[0]  # Take first part before space
-                
-                # Debug first few
-                if abbr in list(dvp.keys())[:2] and position in ["PG", "SF"][:1]:
-                    print(f"[DvP Debug] {abbr} {position} {stat}: col={stat_col}, val={val}")
-                
-                val_numeric = pd.to_numeric(val, errors="coerce")
-                if pd.notna(val_numeric):
-                    # Normalize stat name
-                    normalized_stat = "FG3M" if stat in ["FG3M", "3PM"] else stat
-                    dvp[abbr][position][normalized_stat] = float(val_numeric)
-            else:
-                # Debug missing columns
-                if abbr == list(dvp.keys())[0] and position == "PG":
-                    print(f"[DvP Debug] Could not find column for stat '{stat}' in columns: {df.columns.tolist()}")
-    
-    print(f"[DvP] Parsed {len(dvp)} teams")
-    
-    if not dvp:
-        print("[DvP] ❌ No data parsed!")
-        return {}
-    
-    # Convert values to ranks (1-30, lower allowed = tougher defense = rank 1)
-    for pos in POSITIONS:
-        for stat in ["PTS", "REB", "AST", "FG3M"]:
-            # Collect all values for this position-stat combo
-            vals = {}
-            for team in dvp:
-                if pos in dvp[team] and stat in dvp[team][pos]:
-                    vals[team] = dvp[team][pos][stat]
-            
-            if not vals:
-                continue
-            
-            # Sort by value (ascending = better defense)
-            sorted_teams = sorted(vals.items(), key=lambda x: x[1])
-            
-            # Assign ranks 1-30
-            for rank, (team, _) in enumerate(sorted_teams, start=1):
-                dvp[team][pos][stat] = rank
-    
-    print(f"[DvP] ✅ Converted to ranks (1-30)")
-    
-    # Verify we got data
-    sample_team = list(dvp.keys())[0] if dvp else None
-    if sample_team:
-        print(f"[DvP] Sample - {sample_team}: {dvp[sample_team]}")
+        print(f"[DVP] ❌ Error fetching data: {e}")
     
     return dvp
 
-# -------------------------------
-# MAIN LOADER
-# -------------------------------
-def load_dvp_data():
-    os.makedirs(DATA_PATH, exist_ok=True)
-    need_refresh = True
 
-    if os.path.exists(DVP_FILE):
-        age_hours = (time.time() - os.path.getmtime(DVP_FILE)) / 3600
-        
-        # Also check if file is valid (not empty)
-        try:
-            with open(DVP_FILE, "r") as f:
-                data = json.load(f)
-                if data and len(data) > 0:  # Has content
-                    if age_hours < REFRESH_HOURS:
-                        print(f"[DvP] Using cached data (updated {age_hours:.1f}h ago)")
-                        return data
-                else:
-                    print(f"[DvP] ⚠️ Cache is empty, forcing refresh")
-        except:
-            print(f"[DvP] ⚠️ Cache corrupted, forcing refresh")
+# ------------------------------------------------------
+# Cache Handling
+# ------------------------------------------------------
+def _load_cache():
+    if not os.path.exists(CACHE_FILE):
+        return None
 
-    if need_refresh:
-        print("[DvP] ⏳ Refreshing DvP data from Hashtag Basketball...")
-        df = fetch_hashtag_table()
-        
-        if df is not None and not df.empty:
-            dvp_dict = process_hashtag_table(df)
-            
-            if dvp_dict and len(dvp_dict) > 0:
-                with open(DVP_FILE, "w") as f:
-                    json.dump(dvp_dict, f, indent=2)
-                print(f"[DvP] ✅ Data refreshed: {len(dvp_dict)} teams saved ({datetime.now().strftime('%Y-%m-%d %H:%M:%S')})")
-                return dvp_dict
-            else:
-                print("[DvP] ❌ Processed data is empty!")
-        else:
-            print("[DvP] ❌ Failed to fetch Hashtag Basketball data.")
-        
-        # Fallback to old cache if available
-        if os.path.exists(DVP_FILE):
-            print("[DvP] ⚠️ Using last cached data.")
-            with open(DVP_FILE, "r") as f:
-                return json.load(f)
-        
-        print("[DvP] 🚫 No valid data available; using neutral multipliers.")
-        return {}
+    try:
+        age = (time.time() - os.path.getmtime(CACHE_FILE)) / 3600
+        if age < CACHE_HOURS:
+            with open(CACHE_FILE, "r") as f:
+                print(f"[DVP] 🟢 Using cached DvP ({age:.1f}h old)")
+                return json.load(f)["dvp"]
+    except Exception as e:
+        print(f"[DVP] ⚠️ Cache load error: {e}")
+        pass
+
+    return None
+
+
+def _save_cache(dvp):
+    os.makedirs("data", exist_ok=True)
+    with open(CACHE_FILE, "w") as f:
+        json.dump({"timestamp": time.time(), "dvp": dvp}, f, indent=2)
+    print("[DVP] 💾 Saved DvP cache.")
+
+
+# ------------------------------------------------------
+# Public Loader
+# ------------------------------------------------------
+def load_dvp_data(force_refresh=False):
+    """
+    Load Defense vs Position data.
+    Returns dict: dvp[TEAM_ABBR][POS][STAT] = rank
+    """
+    if not force_refresh:
+        cached = _load_cache()
+        if cached:
+            return cached
+
+    dvp = _fetch_dvp_from_hashtag()
     
-    with open(DVP_FILE, "r") as f:
-        return json.load(f)
+    # Check if we got data
+    total_entries = sum(
+        len(dvp[team][pos]) 
+        for team in dvp 
+        for pos in dvp[team]
+    )
+    
+    if total_entries > 0:
+        _save_cache(dvp)
+        return dvp
+    
+    print("[DVP] ⚠️ No DvP available. Returning empty.")
+    return {}
 
-# -------------------------------
-# TEST MODE
-# -------------------------------
+
+# ------------------------------------------------------
+# Test function
+# ------------------------------------------------------
 if __name__ == "__main__":
-    data = load_dvp_data()
-    print(f"\n[DvP] Final result: Loaded {len(data)} teams.")
+    print("Testing DvP scraper...")
+    dvp_data = load_dvp_data(force_refresh=True)
     
-    if data:
-        print(f"[DvP] Sample teams: {list(data.keys())[:5]}")
+    if dvp_data:
+        # Count total entries
+        total = sum(
+            len(dvp_data[team][pos]) 
+            for team in dvp_data 
+            for pos in dvp_data[team]
+        )
+        print(f"\n[DVP] Total entries: {total}")
         
-        # Test ATL
-        if "ATL" in data:
-            print(f"\n[DvP] ATL data:")
-            print(f"  Positions: {list(data['ATL'].keys())}")
-            if "SF" in data["ATL"]:
-                print(f"  SF stats: {data['ATL']['SF']}")
+        # Print sample data for a few teams
+        print("\n[DVP] Sample data:")
+        for sample_team in ["NYK", "GSW", "LAL"][:3]:
+            if sample_team in dvp_data:
+                print(f"\n{sample_team}:")
+                for pos in ["PG", "SG", "SF", "PF", "C"]:
+                    if dvp_data[sample_team][pos]:
+                        print(f"  {pos}: {dvp_data[sample_team][pos]}")
+                break
+    else:
+        print("\n[DVP] ❌ No data retrieved")

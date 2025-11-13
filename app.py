@@ -238,7 +238,6 @@ f"""
   border-top:1px solid var(--border); margin-top:40px;
 }}
 .footer strong {{ color: var(--primary) !important; }}
-
 @media (max-width: 768px) {{
   .brand-title {{ font-size: 22px; }}
   .metric-grid {{ grid-template-columns: 1fr; }}
@@ -264,6 +263,7 @@ def render_header(is_admin=False):
              🧠 ADMIN MODE
         </div>
         """
+
     st.markdown(
         f"""
         <div class="main-header">

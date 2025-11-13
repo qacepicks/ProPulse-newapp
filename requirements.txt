@@ -1,10 +1,26 @@
-streamlit
-pandas
-numpy
-requests
-plotly
-scipy
-nba-api
-python-dateutil
-pytz
-openpyxl
+# Core dependencies
+streamlit>=1.28.0
+pandas>=2.0.0
+numpy>=1.24.0
+requests>=2.31.0
+
+# NBA API and data fetching
+nba-api>=1.4.1
+beautifulsoup4>=4.12.0
+lxml>=4.9.0
+html5lib>=1.1
+
+# Statistical and scientific computing
+scipy>=1.11.0
+plotly>=5.17.0
+
+# Date/time utilities
+pytz>=2023.3
+python-dateutil>=2.8.2
+
+# Excel file handling (for batch uploads)
+openpyxl>=3.1.0
+xlrd>=2.0.1
+
+# Optional: Rate limiting and caching
+cachetools>=5.3.0

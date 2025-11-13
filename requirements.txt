@@ -2,9 +2,9 @@ streamlit
 pandas
 numpy
 requests
-plotly>=5.0.0
-openpyxl
+plotly
 scipy
+nba-api
 python-dateutil
-nba_api
 pytz
+openpyxl

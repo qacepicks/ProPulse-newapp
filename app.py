@@ -1140,3 +1140,21 @@ st.markdown(
     """,
     unsafe_allow_html=True,
 )
+# ======================================================
+# 🚀 Vercel Streamlit Launcher (Required)
+# ======================================================
+if __name__ == "__main__":
+    import sys
+    import streamlit.web.cli as stcli
+
+    # Vercel runs the script as a normal Python file — this converts it into a Streamlit runtime
+    sys.argv = [
+        "streamlit", 
+        "run", 
+        "app.py", 
+        "--server.port", 
+        "8000", 
+        "--server.address", 
+        "0.0.0.0"
+    ]
+    sys.exit(stcli.main())

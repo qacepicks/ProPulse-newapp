@@ -1,10 +1,10 @@
 streamlit
 pandas
 numpy
-scipy
 requests
-pytz
-beautifulsoup4
-nba_api
+plotly
 openpyxl
-colorama
+scipy
+python-dateutil
+nba_api
+pytz

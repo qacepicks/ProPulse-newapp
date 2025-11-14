@@ -556,29 +556,6 @@ f"""
 st.markdown("#### 🔬 Full Result Row")
 st.dataframe(df_res, use_container_width=True)
 
-
-# Removed distribution graph completely
-    # ===============================
-    # 📈 Optional distribution chart
-    # ===============================
-    if "Distribution" in df_res.columns and isinstance(
-        df_res["Distribution"].iloc[0], (list, tuple, np.ndarray)
-    ):
-        try:
-            dist_vals = np.array(df_res["Distribution"].iloc[0], dtype=float)
-            x = np.arange(len(dist_vals))
-            fig = go.Figure()
-            fig.add_trace(go.Bar(x=x, y=dist_vals))
-            fig.update_layout(
-                title="Model Distribution (simulated outcomes)",
-                xaxis_title=stat,
-                yaxis_title="Probability",
-                bargap=0.02,
-            )
-            st.plotly_chart(fig, use_container_width=True)
-        except Exception:
-            pass
-
 # ===============================
 # 📦 BATCH MODE UI
 # ===============================

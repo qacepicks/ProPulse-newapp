@@ -44,6 +44,7 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+
 # ===============================
 # 🎨 GLOBAL STYLING (Blue–Red, Mobile-Friendly)
 # ===============================
@@ -68,12 +69,14 @@ def inject_css():
             color: var(--text-primary);
         }
 
+        /* Remove padding to make space feel tighter on mobile */
         .block-container {
             padding-top: 1.5rem;
             padding-bottom: 2rem;
             max-width: 1200px;
         }
 
+        /* Sidebar styling */
         section[data-testid="stSidebar"] {
             background: #020617;
             border-right: 1px solid var(--border-subtle);
@@ -86,6 +89,7 @@ def inject_css():
             border-radius: 10px;
         }
 
+        /* Titles and headers */
         h1, h2, h3, h4 {
             color: var(--text-primary);
             letter-spacing: 0.03em;
@@ -103,6 +107,7 @@ def inject_css():
             padding: 1.25rem 1.5rem;
         }
 
+        /* Core cards */
         .metric-card {
             background: rgba(15,23,42,0.95);
             border-radius: 16px;
@@ -129,6 +134,7 @@ def inject_css():
             color: var(--text-muted);
         }
 
+        /* Inputs */
         .stTextInput input,
         .stNumberInput input,
         .stSelectbox select {
@@ -140,6 +146,7 @@ def inject_css():
             font-size: 0.95rem !important;
         }
 
+        /* Buttons */
         .stButton button {
             border-radius: 999px !important;
             padding: 0.6rem 1.1rem !important;
@@ -152,11 +159,13 @@ def inject_css():
             font-weight: 600 !important;
         }
 
+        /* Tables */
         .stDataFrame, .stTable {
             border-radius: 14px;
             overflow: hidden;
         }
 
+        /* Footer */
         .footer {
             margin-top: 2rem;
             padding-top: 1.25rem;
@@ -189,10 +198,12 @@ def inject_css():
         unsafe_allow_html=True,
     )
 
+
 inject_css()
 
+
 # ===============================
-# 🖼️ LOGO + HEADER
+# 🖼️ LOGO HANDLING
 # ===============================
 def get_logo_base64():
     logo_path = "proppulse_logo.png"
@@ -229,13 +240,14 @@ def render_header():
                             Data-Driven Player Prop Analyzer
                         </span>
                         <span style="font-size:0.85rem;color:#9ca3af;">
-                            Calibrated projections · Matchup signals · True EV detection
+                            Calibrated projections · Matchup context · EV-first edges
                         </span>
                     </div>
                 </div>
                 """,
                 unsafe_allow_html=True,
             )
+
 
 # ===============================
 # 🧩 HELPERS FOR MODEL CALLS
@@ -251,8 +263,45 @@ def safe_load_settings():
 
 
 def run_single_prop(player, stat, line, odds, debug_mode=False):
+    """
+    Wrapper around pe.analyze_single_prop with hard type-normalization
+    so Streamlit can't send bad types into the model.
+    """
     settings = safe_load_settings()
+
+    # --- Normalize line → float
     try:
+        if line is None:
+            line = 0.0
+        elif isinstance(line, str):
+            line = float(line.strip())
+        else:
+            line = float(line)
+    except Exception:
+        line = 0.0
+
+    # --- Normalize odds → int
+    try:
+        if isinstance(odds, str):
+            odds_clean = odds.strip().replace("+", "")
+            odds = int(odds_clean)
+        else:
+            odds = int(odds)
+    except Exception:
+        odds = -110
+
+    # --- Normalize stat → uppercase string
+    try:
+        stat = str(stat).strip().upper()
+    except Exception:
+        stat = "PTS"
+
+    # Default debug to True if somehow None
+    if debug_mode is None:
+        debug_mode = True
+
+    try:
+        # Preferred model API
         if hasattr(pe, "analyze_single_prop"):
             return pe.analyze_single_prop(
                 player=player,
@@ -263,12 +312,13 @@ def run_single_prop(player, stat, line, odds, debug_mode=False):
                 debug_mode=debug_mode,
             )
 
-        # CLI fallback (not usually used in the app)
+        # Fallback: CLI-style main()
         buf = io.StringIO()
         with redirect_stdout(buf):
             if hasattr(pe, "main"):
                 pe.main()
         return {"raw_output": buf.getvalue()}
+
     except Exception as e:
         st.error(f"❌ Error while running model: {e}")
         return None
@@ -281,45 +331,16 @@ def run_batch_from_df(df_input, debug_mode=False):
             return pe.analyze_batch_df(df_input, settings=settings, debug_mode=debug_mode)
         elif hasattr(pe, "analyze_batch"):
             return pe.analyze_batch(df_input, settings=settings, debug_mode=debug_mode)
-        elif hasattr(pe, "batch_analyze_props"):
-            # Convert DF → list of props that batch_analyze_props expects
-            props = []
-            cols = {c.lower(): c for c in df_input.columns}
-            for _, row in df_input.iterrows():
-                try:
-                    player = str(row[cols["player"]]).strip()
-                    stat = str(row[cols["stat"]]).strip().upper()
-                    line_val = float(row[cols["line"]])
-                    odds_raw = str(row[cols["odds"]])
-                    odds_val = int(str(odds_raw).replace("+", "").strip())
-                    if not player:
-                        continue
-                    props.append(
-                        {
-                            "player": player,
-                            "stat": stat,
-                            "line": line_val,
-                            "odds": odds_val,
-                        }
-                    )
-                except Exception:
-                    continue
-
-            if not props:
-                st.error("No valid props found in the uploaded data.")
-                return None
-
-            results = pe.batch_analyze_props(props, settings=settings)
-            return pd.DataFrame(results) if isinstance(results, list) else results
         else:
             st.warning(
                 "⚠️ Batch function not found in prop_ev.py. "
-                "Expected analyze_batch_df, analyze_batch, or batch_analyze_props."
+                "Expected analyze_batch_df or analyze_batch."
             )
             return None
     except Exception as e:
         st.error(f"❌ Error while running batch analysis: {e}")
         return None
+
 
 # ===============================
 # 📊 SINGLE PROP UI
@@ -344,7 +365,7 @@ def single_prop_view():
             with right:
                 odds = st.text_input("Odds (US)", value="-110", help="Enter like -110 or +100")
 
-            # ✅ default ON
+            # Debug ON by default
             debug_mode = st.checkbox("Enable debug mode", value=True)
 
         with c2:
@@ -352,7 +373,7 @@ def single_prop_view():
             st.write(
                 "The model blends recent form, matchup context, and calibrated probability logic "
                 "to highlight where a number may be mispriced. Probabilities are tuned toward "
-                "realistic NBA scoring distributions, not just raw hit rates."
+                "realistic NBA scoring distributions, not simple hit-rate chasing."
             )
             st.caption("Tip: Alternate lines are supported — adjust the line to see how the edge moves.")
 
@@ -375,10 +396,12 @@ def single_prop_view():
     if result is None:
         return
 
+    # If it's the CLI fallback, just show raw output
     if "raw_output" in result:
         st.code(result["raw_output"], language="text")
         return
 
+    # Normalize into DataFrame for flexibility
     if isinstance(result, dict):
         df_res = pd.DataFrame([result])
     elif isinstance(result, pd.DataFrame):
@@ -387,50 +410,43 @@ def single_prop_view():
         st.write(result)
         return
 
-    def pick(series, names, default=None):
-        for name in names:
-            if name in series:
-                return series[name]
-        return pd.Series([default])
-
-    # Normalized keys (handles both old and new naming)
-    proj = pick(df_res, ["projection", "Projection", "Proj"]).iloc[0]
-    direction = pick(df_res, ["direction", "Direction"]).iloc[0] or ""
-    ev_cents = pick(df_res, ["EV¢", "EV_cents", "EV", "ev"]).iloc[0]
-    model_prob = pick(df_res, ["p_model", "Model Prob", "Model_Prob"]).iloc[0]
-    book_prob = pick(df_res, ["p_book", "Book Prob", "Book_Prob"]).iloc[0]
-    confidence = pick(df_res, ["confidence", "Confidence"]).iloc[0]
-    opponent = pick(df_res, ["opponent", "Opponent"]).iloc[0] or "–"
-    position = pick(df_res, ["position", "Position"]).iloc[0] or "–"
-    dvp_mult = pick(df_res, ["dvp_mult", "DvP Mult", "DvP_Mult"]).iloc[0]
+    # Extract key values defensively (fallbacks match prop_ev keys)
+    proj = df_res.get("projection", df_res.get("Projection", pd.Series([None]))).iloc[0]
+    direction = df_res.get("direction", df_res.get("Direction", pd.Series([""]))).iloc[0]
+    ev_cents = df_res.get("EV¢", df_res.get("EV", pd.Series([None]))).iloc[0]
+    model_prob = df_res.get("p_model", df_res.get("Model_Prob", pd.Series([None]))).iloc[0]
+    book_prob = df_res.get("p_book", df_res.get("Book_Prob", pd.Series([None]))).iloc[0]
+    confidence = df_res.get("confidence", df_res.get("Confidence", pd.Series([None]))).iloc[0]
+    opponent = df_res.get("opponent", df_res.get("Opponent", pd.Series(["–"]))).iloc[0]
+    position = df_res.get("position", df_res.get("Position", pd.Series(["–"]))).iloc[0]
+    dvp_mult = df_res.get("dvp_mult", df_res.get("DvP Mult", pd.Series([None]))).iloc[0]
 
     st.markdown("#### 📈 Model Snapshot")
 
     m1, m2, m3, m4 = st.columns(4)
+
+    # Projection card
     with m1:
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
         st.markdown('<div class="metric-label">Projection</div>', unsafe_allow_html=True)
-        proj_str = f"{proj:.2f}" if proj is not None and pd.notna(proj) else "–"
         st.markdown(
-            f'<div class="metric-value">{proj_str}</div>',
+            f'<div class="metric-value">{proj if proj is not None else "–"}</div>',
             unsafe_allow_html=True,
         )
         st.markdown(
             f'<div class="metric-sub">Line {line:.1f} · {direction}</div>',
             unsafe_allow_html=True,
         )
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
+    # EV card
     with m2:
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
         st.markdown('<div class="metric-label">Expected Value</div>', unsafe_allow_html=True)
-        if ev_cents is not None and pd.notna(ev_cents):
-            try:
-                ev_num = float(ev_cents)
-                ev_str = f"{ev_num:+.1f}¢"
-            except Exception:
-                ev_str = str(ev_cents)
-        else:
+        try:
+            ev_val = float(ev_cents) if ev_cents is not None else None
+            ev_str = f"{ev_val:+.1f}¢" if ev_val is not None else "–"
+        except Exception:
             ev_str = "–"
         st.markdown(
             f'<div class="metric-value">{ev_str}</div>',
@@ -440,12 +456,13 @@ def single_prop_view():
             '<div class="metric-sub">Per $1 exposure</div>',
             unsafe_allow_html=True,
         )
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
+    # Model vs book
     with m3:
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
         st.markdown('<div class="metric-label">Model vs Book</div>', unsafe_allow_html=True)
-        if model_prob is not None and book_prob is not None and pd.notna(model_prob) and pd.notna(book_prob):
+        if model_prob is not None and book_prob is not None:
             try:
                 mp = float(model_prob) * 100
                 bp = float(book_prob) * 100
@@ -463,26 +480,22 @@ def single_prop_view():
         else:
             st.markdown('<div class="metric-value">–</div>', unsafe_allow_html=True)
             st.markdown('<div class="metric-sub">No prob data</div>', unsafe_allow_html=True)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
+    # Context card
     with m4:
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
         st.markdown('<div class="metric-label">Context</div>', unsafe_allow_html=True)
-        if confidence is not None and pd.notna(confidence):
-            try:
-                conf_str = f"{float(confidence)*100:.0f}%"
-            except Exception:
-                conf_str = str(confidence)
-        else:
-            conf_str = "–"
+        conf_str = f"{float(confidence)*100:.0f}%" if confidence is not None else "–"
         matchup_bits = []
         if opponent and opponent != "–":
             matchup_bits.append(f"vs {opponent}")
         if position and position != "–":
             matchup_bits.append(position)
         try:
-            if dvp_mult is not None and pd.notna(dvp_mult):
-                matchup_bits.append(f"DvP {float(dvp_mult):.2f}×")
+            if dvp_mult is not None and dvp_mult != "":
+                dvp_val = float(dvp_mult)
+                matchup_bits.append(f"DvP {dvp_val:.2f}×")
         except Exception:
             pass
         sub_text = " · ".join(matchup_bits) if matchup_bits else "No matchup data"
@@ -494,12 +507,15 @@ def single_prop_view():
             f'<div class="metric-sub">{sub_text}</div>',
             unsafe_allow_html=True,
         )
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     st.markdown("#### 🔬 Full Result Row")
     st.dataframe(df_res, use_container_width=True)
 
-    if "Distribution" in df_res.columns and isinstance(df_res["Distribution"].iloc[0], (list, tuple, np.ndarray)):
+    # Optional distribution chart if returned
+    if "Distribution" in df_res.columns and isinstance(
+        df_res["Distribution"].iloc[0], (list, tuple, np.ndarray)
+    ):
         try:
             dist_vals = np.array(df_res["Distribution"].iloc[0], dtype=float)
             x = np.arange(len(dist_vals))
@@ -514,6 +530,7 @@ def single_prop_view():
             st.plotly_chart(fig, use_container_width=True)
         except Exception:
             pass
+
 
 # ===============================
 # 📦 BATCH MODE UI
@@ -543,7 +560,7 @@ def batch_mode_view():
         horizontal=True,
     )
 
-    # ✅ default ON
+    # Debug ON by default for batch as well
     debug_mode = st.checkbox("Enable debug mode for batch", value=True)
 
     if mode == "Manual entry":
@@ -560,15 +577,21 @@ def batch_mode_view():
                     key="batch_stat",
                 )
             with c3:
-                m_line = st.number_input("Line", key="batch_line", step=0.5, format="%.1f")
+                m_line = st.number_input(
+                    "Line", key="batch_line", step=0.5, format="%.1f"
+                )
             with c4:
                 m_odds = st.text_input("Odds", key="batch_odds", value="-110")
 
             s1, s2 = st.columns([1, 1])
             with s1:
-                submitted = st.form_submit_button("➕ Add to slate", use_container_width=True)
+                submitted = st.form_submit_button(
+                    "➕ Add to slate", use_container_width=True
+                )
             with s2:
-                clear_clicked = st.form_submit_button("🧹 Clear all", use_container_width=True)
+                clear_clicked = st.form_submit_button(
+                    "🧹 Clear all", use_container_width=True
+                )
 
         if submitted:
             if not m_player.strip():
@@ -609,12 +632,7 @@ def batch_mode_view():
             if "EV" in df_results.columns or "EV¢" in df_results.columns:
                 ev_col = "EV" if "EV" in df_results.columns else "EV¢"
                 try:
-                    df_sorted = df_results.copy()
-                    df_sorted[ev_col] = pd.to_numeric(
-                        df_sorted[ev_col].astype(str).str.replace("+", "", regex=False),
-                        errors="coerce",
-                    )
-                    df_sorted = df_sorted.sort_values(by=ev_col, ascending=False)
+                    df_sorted = df_results.sort_values(by=ev_col, ascending=False)
                     st.markdown("##### 🔝 Highest EV props")
                     st.dataframe(df_sorted.head(25), use_container_width=True)
                 except Exception:
@@ -649,7 +667,9 @@ def batch_mode_view():
             st.markdown("#### 📋 Preview")
             st.dataframe(df_input.head(50), use_container_width=True)
 
-            if st.button("🚀 Analyze uploaded slate", type="primary", use_container_width=True):
+            if st.button(
+                "🚀 Analyze uploaded slate", type="primary", use_container_width=True
+            ):
                 with st.spinner("Running batch model…"):
                     df_results = run_batch_from_df(df_input, debug_mode=debug_mode)
 
@@ -665,12 +685,7 @@ def batch_mode_view():
                 if "EV" in df_results.columns or "EV¢" in df_results.columns:
                     ev_col = "EV" if "EV" in df_results.columns else "EV¢"
                     try:
-                        df_sorted = df_results.copy()
-                        df_sorted[ev_col] = pd.to_numeric(
-                            df_sorted[ev_col].astype(str).str.replace("+", "", regex=False),
-                            errors="coerce",
-                        )
-                        df_sorted = df_sorted.sort_values(by=ev_col, ascending=False)
+                        df_sorted = df_results.sort_values(by=ev_col, ascending=False)
                         st.markdown("##### 🔝 Highest EV props")
                         st.dataframe(df_sorted.head(25), use_container_width=True)
                     except Exception:
@@ -687,6 +702,7 @@ def batch_mode_view():
         else:
             st.info("Upload a CSV file to start batch analysis.")
 
+
 # ===============================
 # 📡 LIVE EV SHEET VIEWER
 # ===============================
@@ -694,7 +710,7 @@ def live_sheet_view():
     st.markdown("### 📡 Live EV Board (Google Sheets)")
 
     st.caption(
-        "Pulls directly from your live Google Sheet so visitors can see the current EV board "
+        "This pulls directly from your live Google Sheet so visitors can see the current EV board "
         "without downloading a file."
     )
 
@@ -724,6 +740,7 @@ def live_sheet_view():
     if important_cols:
         st.markdown("#### 🔝 Top EV snapshot")
         preview = df_sheet.copy()
+        # try to sort by EV if present
         ev_col = None
         for candidate in ["EV¢", "EV", "ev", "ev¢"]:
             if candidate in preview.columns:
@@ -745,6 +762,7 @@ def live_sheet_view():
     st.markdown("#### 🧾 Full sheet")
     st.dataframe(df_sheet, use_container_width=True)
 
+
 # ===============================
 # ℹ️ ABOUT VIEW
 # ===============================
@@ -753,9 +771,9 @@ def about_view():
 
     st.write(
         "PropPulse+ is a calibrated NBA player prop engine. It combines recent form, "
-        "season-long context, defense-vs-position multipliers, and matchup-aware logic to "
-        "surface edges instead of vibes. The goal is not just to chase hit rates, but to lean "
-        "into spots where price, role, and matchup all align."
+        "season-long context, defense-vs-position multipliers, and matchup-aware logic to surface "
+        "edges instead of vibes. The goal is not just to chase hit rates, but to lean into spots "
+        "where price, role, and matchup all align."
     )
 
     st.write(
@@ -776,8 +794,9 @@ def about_view():
         unsafe_allow_html=True,
     )
 
+
 # ===============================
-# 🧭 SIDEBAR (LIGHTWEIGHT)
+# 🧭 SIDEBAR (BRANDING + TIP ONLY)
 # ===============================
 with st.sidebar:
     st.markdown("### 🏀 PropPulse+")
@@ -785,11 +804,12 @@ with st.sidebar:
     st.markdown("---")
     st.caption(
         "Tip: Use the tabs at the top of the page to switch between views. "
-        "On mobile, you can toggle this sidebar to maximize screen space."
+        "On mobile, toggle this sidebar to maximize screen space."
     )
 
+
 # ===============================
-# 🚀 MAIN LAYOUT — HEADER + TABS
+# 🚀 MAIN LAYOUT — CENTER TABS
 # ===============================
 render_header()
 

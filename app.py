@@ -424,8 +424,7 @@ def single_prop_view():
     st.markdown("#### 📈 Model Snapshot")
 
     m1, m2, m3, m4 = st.columns(4)
-
-       # ======================================================
+# ======================================================
 # 📊 PROJECTION CARD (with green/red arrow + glow)
 # ======================================================
 with m1:
@@ -478,23 +477,20 @@ with m1:
     )
 
     # Label
-    st.markdown(
-        '<div class="metric-label">Projection</div>',
-        unsafe_allow_html=True,
-    )
+    st.markdown('<div class="metric-label">Projection</div>', unsafe_allow_html=True)
 
-    # Main value + arrow (right-aligned)
+    # Main value + arrow
     proj_display = f"{proj:.2f}" if proj is not None else "–"
     st.markdown(
         f"""
         <div style="
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 1.3rem;
-            font-weight: 700;
-            margin-top: 0.15rem;
-            color: var(--text-primary);
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+            font-size:1.3rem;
+            font-weight:700;
+            margin-top:0.15rem;
+            color:var(--text-primary);
         ">
             <span>{proj_display}</span>
             <span style="color:{arrow_color};font-size:1.4rem;margin-left:0.5rem;">
@@ -505,7 +501,7 @@ with m1:
         unsafe_allow_html=True,
     )
 
-    # Subtext (direction)
+    # Subtext
     st.markdown(
         f'<div class="metric-sub">Line {line} · {dir_text}</div>',
         unsafe_allow_html=True,
@@ -515,58 +511,49 @@ with m1:
     st.markdown("</div>", unsafe_allow_html=True)
 
 
-    # ===============================
-    # 💰 EV CARD (±2¢ threshold coloring)
-    # ===============================
-    with m2:
-        # ======================================================
-        # 🎨 Dynamic EV color
-        # green  = +2¢ or more
-        # red    = -2¢ or worse
-        # blue   = between -2¢ and +2¢
-        # ======================================================
-        try:
-            if ev_cents is not None:
-                ev_val = float(ev_cents)
-                if ev_val >= 2:
-                    ev_color = "rgba(34,197,94,0.33)"   # green
-                elif ev_val <= -2:
-                    ev_color = "rgba(239,68,68,0.33)"  # red
-                else:
-                    ev_color = "rgba(59,130,246,0.33)" # blue
-            else:
-                ev_color = "rgba(59,130,246,0.18)"
-        except:
-            ev_color = "rgba(59,130,246,0.18)"
 
-        st.markdown(
-            f"""
-            <div class="metric-card" style="
-                box-shadow: 0 0 28px {ev_color};
-                border: 1px solid rgba(148,163,184,0.35);
-            ">
-            """,
-            unsafe_allow_html=True,
-        )
-
-        st.markdown('<div class="metric-label">Expected Value</div>', unsafe_allow_html=True)
-
-        try:
+# ======================================================
+# 💰 EV CARD (±2¢ threshold coloring)
+# ======================================================
+with m2:
+    # Determine EV color
+    try:
+        if ev_cents is not None:
             ev_val = float(ev_cents)
-            ev_str = f"{ev_val:+.1f}¢"
-        except:
-            ev_str = "–"
+            if ev_val >= 2:
+                ev_color = "rgba(34,197,94,0.33)"   # green
+            elif ev_val <= -2:
+                ev_color = "rgba(239,68,68,0.33)"  # red
+            else:
+                ev_color = "rgba(59,130,246,0.33)" # blue
+        else:
+            ev_color = "rgba(59,130,246,0.18)"
+    except:
+        ev_color = "rgba(59,130,246,0.18)"
 
-        st.markdown(
-            f'<div class="metric-value">{ev_str}</div>',
-            unsafe_allow_html=True,
-        )
-        st.markdown(
-            '<div class="metric-sub">Per $1 exposure</div>',
-            unsafe_allow_html=True,
-        )
+    st.markdown(
+        f"""
+        <div class="metric-card" style="
+            box-shadow: 0 0 28px {ev_color};
+            border: 1px solid rgba(148,163,184,0.35);
+        ">
+        """,
+        unsafe_allow_html=True,
+    )
 
-        st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown('<div class="metric-label">Expected Value</div>', unsafe_allow_html=True)
+
+    try:
+        ev_val = float(ev_cents)
+        ev_str = f"{ev_val:+.1f}¢"
+    except:
+        ev_str = "–"
+
+    st.markdown(f'<div class="metric-value">{ev_str}</div>', unsafe_allow_html=True)
+    st.markdown('<div class="metric-sub">Per $1 exposure</div>', unsafe_allow_html=True)
+
+    st.markdown("</div>", unsafe_allow_html=True)
+
 
     # ===============================
     # 📊 MODEL VS BOOK CARD

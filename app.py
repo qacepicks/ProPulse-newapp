@@ -364,39 +364,106 @@ st.markdown("### 📈 Model Snapshot")
 m1, m2, m3, m4 = st.columns(4)
 
 # ------------------------------------------
+# 🔥 PRE-COMPUTE VALUES SAFELY
+# ------------------------------------------
+
+# Projection + line
+try:
+    p_val = float(proj)
+    proj_display = f"{p_val:.2f}"
+except:
+    p_val = None
+    proj_display = "–"
+
+try:
+    l_val = float(line)
+except:
+    l_val = None
+
+# Direction
+if p_val is not None and l_val is not None:
+    if p_val > l_val:
+        dir_text = "Higher"
+        arrow = "▲"
+        proj_color = "#22c55e"
+        proj_bg = "rgba(34,197,94,0.18)"
+    elif p_val < l_val:
+        dir_text = "Lower"
+        arrow = "▼"
+        proj_color = "#ef4444"
+        proj_bg = "rgba(239,68,68,0.18)"
+    else:
+        dir_text = "Even"
+        arrow = "▬"
+        proj_color = "#3b82f6"
+        proj_bg = "rgba(59,130,246,0.18)"
+else:
+    dir_text = "–"
+    arrow = "▬"
+    proj_color = "#64748b"
+    proj_bg = "rgba(148,163,184,0.18)"
+
+# EV VALUE
+try:
+    ev_val = float(ev_cents)
+    ev_str = f"{ev_val:+.1f}¢"
+    if ev_val >= 2:
+        ev_color = "#22c55e"
+        ev_bg = "rgba(34,197,94,0.18)"
+    elif ev_val <= -2:
+        ev_color = "#ef4444"
+        ev_bg = "rgba(239,68,68,0.18)"
+    else:
+        ev_color = "#3b82f6"
+        ev_bg = "rgba(59,130,246,0.18)"
+except:
+    ev_val = None
+    ev_str = "–"
+    ev_color = "#64748b"
+    ev_bg = "rgba(148,163,184,0.18)"
+
+# Model probability
+try:
+    mp = float(model_prob) * 100
+    mp_str = f"{mp:.1f}%"
+except:
+    mp = None
+    mp_str = "–"
+
+# Book probability
+try:
+    bp = float(book_prob) * 100
+    bp_str = f"{bp:.1f}%"
+except:
+    bp = None
+    bp_str = "–"
+
+# Confidence
+try:
+    conf_str = f"{float(confidence)*100:.0f}%"
+except:
+    conf_str = "–"
+
+# Matchup string
+match_bits = []
+if opponent:  match_bits.append(f"vs {opponent}")
+if position:  match_bits.append(position)
+try:
+    if dvp_mult:
+        match_bits.append(f"DvP {float(dvp_mult):.2f}×")
+except:
+    pass
+
+match_str = " · ".join(match_bits) if match_bits else "No matchup data"
+
+# ------------------------------------------
 # PROJECTION CARD
 # ------------------------------------------
 with m1:
-
-    # Safe extraction
-    try:
-        p_val = float(proj)
-        l_val = float(line)
-    except:
-        p_val = l_val = None
-
-    if p_val is not None and l_val is not None:
-        if p_val > l_val:
-            arrow = "▲"
-            color = "#22c55e"   # green
-            bg = "rgba(34,197,94,0.18)"
-        elif p_val < l_val:
-            arrow = "▼"
-            color = "#ef4444"   # red
-            bg = "rgba(239,68,68,0.18)"
-        else:
-            arrow = "▬"
-            color = "#3b82f6"   # blue
-            bg = "rgba(59,130,246,0.18)"
-    else:
-        arrow = "▬"
-        color = "#64748b"
-        bg = "rgba(148,163,184,0.18)"
-
     st.markdown(
 f"""
 <div style="
-    background:{bg};
+    background:{proj_bg};
     padding:14px 16px;
     border-radius:14px;
     border:1px solid rgba(148,163,184,0.28);
@@ -405,55 +472,32 @@ f"""
 
     <div style="display:flex;justify-content:space-between;align-items:center;
                 font-size:1.35rem;font-weight:700;color:white;margin-top:4px;">
-        <span>{proj:.2f if proj else "-"}</span>
-        <span style="color:{color};font-size:1.4rem;">{arrow}</span>
+        <span>{proj_display}</span>
+        <span style="color:{proj_color};font-size:1.4rem;">{arrow}</span>
     </div>
 
     <div style="font-size:0.9rem;opacity:0.75;margin-top:2px;">
-        Line {line} · {"Higher" if p_val>l_val else "Lower" if p_val<l_val else "Even"}
+        Line {line} · {dir_text}
     </div>
 </div>
 """,
         unsafe_allow_html=True,
     )
 
-
 # ------------------------------------------
 # EV CARD
 # ------------------------------------------
 with m2:
-
-    try:
-        ev_val = float(ev_cents)
-    except:
-        ev_val = None
-
-    if ev_val is None:
-        color = "#64748b"
-        bg = "rgba(148,163,184,0.18)"
-        ev_str = "–"
-    else:
-        ev_str = f"{ev_val:+.1f}¢"
-        if ev_val >= 2:
-            color = "#22c55e"
-            bg = "rgba(34,197,94,0.18)"
-        elif ev_val <= -2:
-            color = "#ef4444"
-            bg = "rgba(239,68,68,0.18)"
-        else:
-            color = "#3b82f6"
-            bg = "rgba(59,130,246,0.18)"
-
     st.markdown(
 f"""
 <div style="
-    background:{bg};
+    background:{ev_bg};
     padding:14px 16px;
     border-radius:14px;
     border:1px solid rgba(148,163,184,0.28);
 ">
     <div style="font-size:0.82rem;opacity:0.75;">Expected Value</div>
-    <div style="font-size:1.35rem;font-weight:700;color:{color};margin-top:4px;">
+    <div style="font-size:1.35rem;font-weight:700;color:{ev_color};margin-top:4px;">
         {ev_str}
     </div>
     <div style="font-size:0.9rem;opacity:0.75;">Per $1 exposure</div>
@@ -462,18 +506,10 @@ f"""
         unsafe_allow_html=True,
     )
 
-
 # ------------------------------------------
 # MODEL VS BOOK CARD
 # ------------------------------------------
 with m3:
-
-    try:
-        mp = float(model_prob) * 100
-        bp = float(book_prob) * 100
-    except:
-        mp = bp = None
-
     st.markdown(
 f"""
 <div style="
@@ -484,37 +520,20 @@ f"""
 ">
     <div style="font-size:0.82rem;opacity:0.75;">Model vs Book</div>
     <div style="font-size:1.35rem;font-weight:700;margin-top:4px;">
-        {mp:.1f}% if mp is not None else "–"
+        {mp_str}
     </div>
     <div style="font-size:0.9rem;opacity:0.75;">
-        Book implied: {bp:.1f}% if bp is not None else "–"
+        Book implied: {bp_str}
     </div>
 </div>
 """,
         unsafe_allow_html=True,
     )
 
-
 # ------------------------------------------
 # CONTEXT CARD
 # ------------------------------------------
 with m4:
-    try:
-        conf_str = f"{float(confidence)*100:.0f}%"
-    except:
-        conf_str = "–"
-
-    match = []
-    if opponent: match.append(f"vs {opponent}")
-    if position: match.append(position)
-    if dvp_mult:
-        try:
-            match.append(f"DvP {float(dvp_mult):.2f}×")
-        except:
-            pass
-
-    match_str = " · ".join(match) if match else "No matchup data"
-
     st.markdown(
 f"""
 <div style="
@@ -531,12 +550,12 @@ f"""
         unsafe_allow_html=True,
     )
 
-
 # ------------------------------------------
 # FULL RESULT ROW
 # ------------------------------------------
 st.markdown("#### 🔬 Full Result Row")
 st.dataframe(df_res, use_container_width=True)
+
 
 # Removed distribution graph completely
     # ===============================

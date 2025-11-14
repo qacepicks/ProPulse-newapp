@@ -425,29 +425,101 @@ def single_prop_view():
 
     m1, m2, m3, m4 = st.columns(4)
 
-    # Projection card
+        # ===============================
+    # 📈 PROJECTION CARD
+    # ===============================
     with m1:
-        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        # ======================================================
+        # 🎨 Dynamic projection color (green=over, red=under)
+        # ======================================================
+        try:
+            if proj is not None and line is not None:
+                p_val = float(proj)
+                l_val = float(line)
+                if p_val > l_val:
+                    proj_color = "rgba(34,197,94,0.33)"   # green
+                elif p_val < l_val:
+                    proj_color = "rgba(239,68,68,0.33)"  # red
+                else:
+                    proj_color = "rgba(59,130,246,0.33)" # blue
+            else:
+                proj_color = "rgba(59,130,246,0.18)"      # fallback
+        except:
+            proj_color = "rgba(59,130,246,0.18)"
+
+        # Projection Card
+        st.markdown(
+            f"""
+            <div class="metric-card" style="
+                box-shadow: 0 0 28px {proj_color};
+                border: 1px solid rgba(148,163,184,0.35);
+            ">
+            """,
+            unsafe_allow_html=True,
+        )
+
         st.markdown('<div class="metric-label">Projection</div>', unsafe_allow_html=True)
+
+        proj_display = f"{proj:.2f}" if proj is not None else "–"
         st.markdown(
-            f'<div class="metric-value">{proj if proj is not None else "–"}</div>',
+            f'<div class="metric-value">{proj_display}</div>',
             unsafe_allow_html=True,
         )
+
+        try:
+            dir_text = "Higher" if float(proj) > float(line) else "Lower"
+        except:
+            dir_text = "–"
+
         st.markdown(
-            f'<div class="metric-sub">Line {line:.1f} · {direction}</div>',
+            f'<div class="metric-sub">Line {line} · {dir_text}</div>',
             unsafe_allow_html=True,
         )
+
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # EV card
+    # ===============================
+    # 💰 EV CARD (±2¢ threshold coloring)
+    # ===============================
     with m2:
-        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
-        st.markdown('<div class="metric-label">Expected Value</div>', unsafe_allow_html=True)
+        # ======================================================
+        # 🎨 Dynamic EV color
+        # green  = +2¢ or more
+        # red    = -2¢ or worse
+        # blue   = between -2¢ and +2¢
+        # ======================================================
         try:
-            ev_val = float(ev_cents) if ev_cents is not None else None
-            ev_str = f"{ev_val:+.1f}¢" if ev_val is not None else "–"
-        except Exception:
+            if ev_cents is not None:
+                ev_val = float(ev_cents)
+                if ev_val >= 2:
+                    ev_color = "rgba(34,197,94,0.33)"   # green
+                elif ev_val <= -2:
+                    ev_color = "rgba(239,68,68,0.33)"  # red
+                else:
+                    ev_color = "rgba(59,130,246,0.33)" # blue
+            else:
+                ev_color = "rgba(59,130,246,0.18)"
+        except:
+            ev_color = "rgba(59,130,246,0.18)"
+
+        st.markdown(
+            f"""
+            <div class="metric-card" style="
+                box-shadow: 0 0 28px {ev_color};
+                border: 1px solid rgba(148,163,184,0.35);
+            ">
+            """,
+            unsafe_allow_html=True,
+        )
+
+        st.markdown('<div class="metric-label">Expected Value</div>', unsafe_allow_html=True)
+
+        try:
+            ev_val = float(ev_cents)
+            ev_str = f"{ev_val:+.1f}¢"
+        except:
             ev_str = "–"
+
         st.markdown(
             f'<div class="metric-value">{ev_str}</div>',
             unsafe_allow_html=True,
@@ -456,12 +528,39 @@ def single_prop_view():
             '<div class="metric-sub">Per $1 exposure</div>',
             unsafe_allow_html=True,
         )
+
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # Model vs book
+    # ===============================
+    # 📊 MODEL VS BOOK CARD
+    # ===============================
     with m3:
-        st.markdown('<div class="metric-card">', unsafe_allow_html=True)
+        # Projection color reused to keep visual consistency
+        try:
+            if proj is not None:
+                if float(proj) > float(line):
+                    proj_color = "rgba(34,197,94,0.28)"
+                elif float(proj) < float(line):
+                    proj_color = "rgba(239,68,68,0.28)"
+                else:
+                    proj_color = "rgba(59,130,246,0.28)"
+            else:
+                proj_color = "rgba(59,130,246,0.18)"
+        except:
+            proj_color = "rgba(59,130,246,0.18)"
+
+        st.markdown(
+            f'''
+            <div class="metric-card" style="
+                box-shadow: 0 0 25px {proj_color};
+                border: 1px solid rgba(148,163,184,0.35);
+            ">
+            ''',
+            unsafe_allow_html=True,
+        )
+
         st.markdown('<div class="metric-label">Model vs Book</div>', unsafe_allow_html=True)
+
         if model_prob is not None and book_prob is not None:
             try:
                 mp = float(model_prob) * 100
@@ -474,19 +573,27 @@ def single_prop_view():
                     f'<div class="metric-sub">Book implied: {bp:.1f}%</div>',
                     unsafe_allow_html=True,
                 )
-            except Exception:
+            except:
                 st.markdown('<div class="metric-value">–</div>', unsafe_allow_html=True)
                 st.markdown('<div class="metric-sub">No prob data</div>', unsafe_allow_html=True)
         else:
             st.markdown('<div class="metric-value">–</div>', unsafe_allow_html=True)
             st.markdown('<div class="metric-sub">No prob data</div>', unsafe_allow_html=True)
+
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # Context card
+    # ===============================
+    # 📌 CONTEXT CARD
+    # ===============================
     with m4:
         st.markdown('<div class="metric-card">', unsafe_allow_html=True)
         st.markdown('<div class="metric-label">Context</div>', unsafe_allow_html=True)
-        conf_str = f"{float(confidence)*100:.0f}%" if confidence is not None else "–"
+
+        try:
+            conf_str = f"{float(confidence)*100:.0f}%" if confidence is not None else "–"
+        except:
+            conf_str = "–"
+
         matchup_bits = []
         if opponent and opponent != "–":
             matchup_bits.append(f"vs {opponent}")
@@ -496,9 +603,11 @@ def single_prop_view():
             if dvp_mult is not None and dvp_mult != "":
                 dvp_val = float(dvp_mult)
                 matchup_bits.append(f"DvP {dvp_val:.2f}×")
-        except Exception:
+        except:
             pass
+
         sub_text = " · ".join(matchup_bits) if matchup_bits else "No matchup data"
+
         st.markdown(
             f'<div class="metric-value">{conf_str}</div>',
             unsafe_allow_html=True,
@@ -507,12 +616,18 @@ def single_prop_view():
             f'<div class="metric-sub">{sub_text}</div>',
             unsafe_allow_html=True,
         )
+
         st.markdown("</div>", unsafe_allow_html=True)
 
+    # ===============================
+    # 🧪 RAW RESULT TABLE
+    # ===============================
     st.markdown("#### 🔬 Full Result Row")
     st.dataframe(df_res, use_container_width=True)
 
-    # Optional distribution chart if returned
+    # ===============================
+    # 📈 Optional distribution chart
+    # ===============================
     if "Distribution" in df_res.columns and isinstance(
         df_res["Distribution"].iloc[0], (list, tuple, np.ndarray)
     ):
@@ -528,7 +643,7 @@ def single_prop_view():
                 bargap=0.02,
             )
             st.plotly_chart(fig, use_container_width=True)
-        except Exception:
+        except:
             pass
 
 

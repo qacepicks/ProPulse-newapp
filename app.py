@@ -357,260 +357,188 @@ def single_prop_view():
     dvp_mult = df_res.get("dvp_mult", df_res.get("DvP Mult", df_res.get("DvP_Mult", pd.Series([None])))).iloc[0]
 
     # ===============================
-    # 📈 MODEL SNAPSHOT — Neon Cards
-    # ===============================
-    st.markdown("#### 📈 Model Snapshot")
+# 📈 MODEL SNAPSHOT — CLEAN, FIXED UI
+# ===============================
+st.markdown("### 📈 Model Snapshot")
 
-    m1, m2, m3, m4 = st.columns(4)
+m1, m2, m3, m4 = st.columns(4)
 
-    # --------------------------------------------------
-    # PROJECTION CARD
-    # --------------------------------------------------
-    with m1:
-        try:
-            p_val = float(proj) if proj is not None else None
-            l_val = float(line) if line is not None else None
+# ------------------------------------------
+# PROJECTION CARD
+# ------------------------------------------
+with m1:
 
-            if p_val is not None and l_val is not None:
-                if p_val > l_val:
-                    arrow = "▲"
-                    color = "#22c55e"
-                    glow = "rgba(34,197,94,0.45)"
-                    bg_grad = "linear-gradient(135deg, rgba(34,197,94,0.20), rgba(34,197,94,0.05))"
-                    dir_text = "Higher"
-                elif p_val < l_val:
-                    arrow = "▼"
-                    color = "#ef4444"
-                    glow = "rgba(239,68,68,0.45)"
-                    bg_grad = "linear-gradient(135deg, rgba(239,68,68,0.20), rgba(239,68,68,0.05))"
-                    dir_text = "Lower"
-                else:
-                    arrow = "▬"
-                    color = "#3b82f6"
-                    glow = "rgba(59,130,246,0.45)"
-                    bg_grad = "linear-gradient(135deg, rgba(59,130,246,0.20), rgba(59,130,246,0.05))"
-                    dir_text = "Even"
-            else:
-                arrow = "▬"
-                color = "#64748b"
-                glow = "rgba(148,163,184,0.30)"
-                bg_grad = "linear-gradient(135deg, rgba(148,163,184,0.18), rgba(148,163,184,0.06))"
-                dir_text = "–"
-        except Exception:
+    # Safe extraction
+    try:
+        p_val = float(proj)
+        l_val = float(line)
+    except:
+        p_val = l_val = None
+
+    if p_val is not None and l_val is not None:
+        if p_val > l_val:
+            arrow = "▲"
+            color = "#22c55e"   # green
+            bg = "rgba(34,197,94,0.18)"
+        elif p_val < l_val:
+            arrow = "▼"
+            color = "#ef4444"   # red
+            bg = "rgba(239,68,68,0.18)"
+        else:
             arrow = "▬"
-            color = "#64748b"
-            glow = "rgba(148,163,184,0.30)"
-            bg_grad = "linear-gradient(135deg, rgba(148,163,184,0.18), rgba(148,163,184,0.06))"
-            dir_text = "–"
+            color = "#3b82f6"   # blue
+            bg = "rgba(59,130,246,0.18)"
+    else:
+        arrow = "▬"
+        color = "#64748b"
+        bg = "rgba(148,163,184,0.18)"
 
-        proj_display = "–"
+    st.markdown(
+f"""
+<div style="
+    background:{bg};
+    padding:14px 16px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.28);
+">
+    <div style="font-size:0.82rem;opacity:0.75;">Projection</div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;
+                font-size:1.35rem;font-weight:700;color:white;margin-top:4px;">
+        <span>{proj:.2f if proj else "-"}</span>
+        <span style="color:{color};font-size:1.4rem;">{arrow}</span>
+    </div>
+
+    <div style="font-size:0.9rem;opacity:0.75;margin-top:2px;">
+        Line {line} · {"Higher" if p_val>l_val else "Lower" if p_val<l_val else "Even"}
+    </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+# ------------------------------------------
+# EV CARD
+# ------------------------------------------
+with m2:
+
+    try:
+        ev_val = float(ev_cents)
+    except:
+        ev_val = None
+
+    if ev_val is None:
+        color = "#64748b"
+        bg = "rgba(148,163,184,0.18)"
+        ev_str = "–"
+    else:
+        ev_str = f"{ev_val:+.1f}¢"
+        if ev_val >= 2:
+            color = "#22c55e"
+            bg = "rgba(34,197,94,0.18)"
+        elif ev_val <= -2:
+            color = "#ef4444"
+            bg = "rgba(239,68,68,0.18)"
+        else:
+            color = "#3b82f6"
+            bg = "rgba(59,130,246,0.18)"
+
+    st.markdown(
+f"""
+<div style="
+    background:{bg};
+    padding:14px 16px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.28);
+">
+    <div style="font-size:0.82rem;opacity:0.75;">Expected Value</div>
+    <div style="font-size:1.35rem;font-weight:700;color:{color};margin-top:4px;">
+        {ev_str}
+    </div>
+    <div style="font-size:0.9rem;opacity:0.75;">Per $1 exposure</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+# ------------------------------------------
+# MODEL VS BOOK CARD
+# ------------------------------------------
+with m3:
+
+    try:
+        mp = float(model_prob) * 100
+        bp = float(book_prob) * 100
+    except:
+        mp = bp = None
+
+    st.markdown(
+f"""
+<div style="
+    background:rgba(99,102,241,0.18);
+    padding:14px 16px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.28);
+">
+    <div style="font-size:0.82rem;opacity:0.75;">Model vs Book</div>
+    <div style="font-size:1.35rem;font-weight:700;margin-top:4px;">
+        {mp:.1f}% if mp is not None else "–"
+    </div>
+    <div style="font-size:0.9rem;opacity:0.75;">
+        Book implied: {bp:.1f}% if bp is not None else "–"
+    </div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
+
+
+# ------------------------------------------
+# CONTEXT CARD
+# ------------------------------------------
+with m4:
+    try:
+        conf_str = f"{float(confidence)*100:.0f}%"
+    except:
+        conf_str = "–"
+
+    match = []
+    if opponent: match.append(f"vs {opponent}")
+    if position: match.append(position)
+    if dvp_mult:
         try:
-            if proj is not None:
-                proj_display = f"{float(proj):.2f}"
-        except Exception:
+            match.append(f"DvP {float(dvp_mult):.2f}×")
+        except:
             pass
 
-        line_display = "-"
-        try:
-            line_display = f"{float(line):.1f}"
-        except Exception:
-            pass
+    match_str = " · ".join(match) if match else "No matchup data"
 
-        st.markdown(
-            f"""
-            <div class="metric-card" style="
-                padding: 1rem 1.2rem;
-                background: {bg_grad};
-                border-radius: 15px;
-                border: 1px solid rgba(255,255,255,0.12);
-                box-shadow: 0 0 18px {glow};
-            ">
-                <div style="font-size: 0.85rem; opacity: 0.8;">Projection</div>
+    st.markdown(
+f"""
+<div style="
+    background:rgba(250,204,21,0.18);
+    padding:14px 16px;
+    border-radius:14px;
+    border:1px solid rgba(148,163,184,0.28);
+">
+    <div style="font-size:0.82rem;opacity:0.75;">Context</div>
+    <div style="font-size:1.35rem;font-weight:700;margin-top:4px;">{conf_str}</div>
+    <div style="font-size:0.9rem;opacity:0.75;">{match_str}</div>
+</div>
+""",
+        unsafe_allow_html=True,
+    )
 
-                <div style="
-                    margin-top: 0.25rem;
-                    display: flex;
-                    justify-content: space-between;
-                    align-items: center;
-                    font-size: 1.45rem;
-                    font-weight: 700;
-                ">
-                    <span>{proj_display}</span>
-                    <span style="
-                        color:{color};
-                        font-size:1.6rem;
-                        margin-left:0.5rem;
-                        animation: float 1.2s infinite ease-in-out;
-                    ">{arrow}</span>
-                </div>
 
-                <div style="margin-top: 0.1rem; font-size: 0.9rem; opacity: 0.8;">
-                    Line {line_display} · {dir_text}
-                </div>
-            </div>
+# ------------------------------------------
+# FULL RESULT ROW
+# ------------------------------------------
+st.markdown("#### 🔬 Full Result Row")
+st.dataframe(df_res, use_container_width=True)
 
-            <style>
-            @keyframes float {{
-                0% {{ transform: translateY(0px); }}
-                50% {{ transform: translateY(-3px); }}
-                100% {{ transform: translateY(0px); }}
-            }}
-            </style>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    # --------------------------------------------------
-    # EV CARD
-    # --------------------------------------------------
-    with m2:
-        try:
-            ev_val = float(ev_cents) if ev_cents is not None else 0.0
-            if ev_val >= 2:
-                color = "#22c55e"
-                bg_grad = "linear-gradient(135deg, rgba(34,197,94,0.20), rgba(34,197,94,0.05))"
-            elif ev_val <= -2:
-                color = "#ef4444"
-                bg_grad = "linear-gradient(135deg, rgba(239,68,68,0.20), rgba(239,68,68,0.05))"
-            else:
-                color = "#3b82f6"
-                bg_grad = "linear-gradient(135deg, rgba(59,130,246,0.20), rgba(59,130,246,0.05))"
-            glow = f"{bg_grad.split('rgba(')[1].split(')')[0]}"
-            glow = "rgba(" + glow + ",0.55)" if "rgba" not in glow else "rgba(59,130,246,0.45)"
-        except Exception:
-            ev_val = 0.0
-            color = "#64748b"
-            bg_grad = "linear-gradient(135deg, rgba(148,163,184,0.15), rgba(148,163,184,0.05))"
-            glow = "rgba(148,163,184,0.30)"
-
-        ev_display = "–"
-        try:
-            if ev_cents is not None:
-                ev_display = f"{float(ev_cents):+,.1f}¢"
-        except Exception:
-            pass
-
-        st.markdown(
-            f"""
-            <div class="metric-card" style="
-                padding: 1rem 1.2rem;
-                background: {bg_grad};
-                border-radius: 15px;
-                border: 1px solid rgba(255,255,255,0.12);
-                box-shadow: 0 0 18px {glow};
-            ">
-                <div style="font-size: 0.85rem; opacity:0.8;">
-                    Expected Value
-                </div>
-
-                <div style="font-size:1.45rem;font-weight:700;color:{color};margin-top:0.25rem;">
-                    {ev_display}
-                </div>
-
-                <div style="font-size:0.9rem; opacity:0.8;">
-                    Per $1 exposure
-                </div>
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    # --------------------------------------------------
-    # MODEL VS BOOK CARD
-    # --------------------------------------------------
-    with m3:
-        try:
-            mp = float(model_prob) * 100 if model_prob is not None else None
-        except Exception:
-            mp = None
-        try:
-            bp = float(book_prob) * 100 if book_prob is not None else None
-        except Exception:
-            bp = None
-
-        mp_display = f"{mp:.1f}%" if mp is not None else "–"
-        bp_display = f"{bp:.1f}%" if bp is not None else "–"
-
-        st.markdown(
-            f"""
-            <div class="metric-card" style="
-                padding: 1rem 1.2rem;
-                background: linear-gradient(135deg, rgba(99,102,241,0.22), rgba(15,23,42,0.95));
-                border-radius: 15px;
-                border: 1px solid rgba(129,140,248,0.35);
-                box-shadow: 0 0 18px rgba(129,140,248,0.45);
-            ">
-
-                <div style="font-size:0.85rem;opacity:0.8;">
-                    Model vs Book
-                </div>
-
-                <div style="font-size:1.45rem;font-weight:700;margin-top:0.25rem;">
-                    {mp_display}
-                </div>
-
-                <div style="font-size:0.9rem;opacity:0.8;">
-                    Book implied: {bp_display}
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    # --------------------------------------------------
-    # CONTEXT CARD
-    # --------------------------------------------------
-    with m4:
-        try:
-            conf_str = f"{float(confidence)*100:.0f}%"
-        except Exception:
-            conf_str = "–"
-
-        matchup_bits = []
-        if opponent and opponent not in ("–", "", None):
-            matchup_bits.append(f"vs {opponent}")
-        if position and position not in ("–", "", None):
-            matchup_bits.append(str(position))
-        try:
-            if dvp_mult is not None and dvp_mult != "":
-                dvp_val = float(dvp_mult)
-                matchup_bits.append(f"DvP {dvp_val:.2f}×")
-        except Exception:
-            pass
-        sub_text = " · ".join(matchup_bits) if matchup_bits else "No matchup data"
-
-        st.markdown(
-            f"""
-            <div class="metric-card" style="
-                padding: 1rem 1.2rem;
-                background: linear-gradient(135deg, rgba(250,204,21,0.22), rgba(15,23,42,0.95));
-                border-radius: 15px;
-                border: 1px solid rgba(250,204,21,0.45);
-                box-shadow: 0 0 18px rgba(250,204,21,0.45);
-            ">
-
-                <div style="font-size:0.85rem;opacity:0.8;">Context</div>
-
-                <div style="font-size:1.45rem;font-weight:700;margin-top:0.25rem;">
-                    {conf_str}
-                </div>
-
-                <div style="font-size:0.9rem;opacity:0.8;">
-                    {sub_text}
-                </div>
-
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-    # ===============================
-    # 🧪 RAW RESULT TABLE
-    # ===============================
-    st.markdown("#### 🔬 Full Result Row")
-    st.dataframe(df_res, use_container_width=True)
-
+# Removed distribution graph completely
     # ===============================
     # 📈 Optional distribution chart
     # ===============================
